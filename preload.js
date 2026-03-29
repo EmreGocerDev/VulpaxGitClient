@@ -1,0 +1,193 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('vulpax', {
+  // Window controls
+  minimize: () => ipcRenderer.invoke('window-minimize'),
+  maximize: () => ipcRenderer.invoke('window-maximize'),
+  close: () => ipcRenderer.invoke('window-close'),
+
+  // Settings
+  getSetting: (key) => ipcRenderer.invoke('get-setting', key),
+  setSetting: (key, value) => ipcRenderer.invoke('set-setting', key, value),
+
+  // Auth
+  auth: (token) => ipcRenderer.invoke('github-auth', token),
+  logout: () => ipcRenderer.invoke('github-logout'),
+  getUser: () => ipcRenderer.invoke('github-get-user'),
+
+  // Repos
+  listRepos: (params) => ipcRenderer.invoke('github-list-repos', params),
+  createRepo: (data) => ipcRenderer.invoke('github-create-repo', data),
+  deleteRepo: (owner, repo) => ipcRenderer.invoke('github-delete-repo', owner, repo),
+  forkRepo: (owner, repo) => ipcRenderer.invoke('github-fork-repo', owner, repo),
+  getRepo: (owner, repo) => ipcRenderer.invoke('github-get-repo', owner, repo),
+
+  // Branches
+  listBranches: (owner, repo) => ipcRenderer.invoke('github-list-branches', owner, repo),
+  createBranch: (owner, repo, name, from) => ipcRenderer.invoke('github-create-branch', owner, repo, name, from),
+  deleteBranch: (owner, repo, branch) => ipcRenderer.invoke('github-delete-branch', owner, repo, branch),
+
+  // Commits
+  listCommits: (owner, repo, params) => ipcRenderer.invoke('github-list-commits', owner, repo, params),
+  getCommit: (owner, repo, ref) => ipcRenderer.invoke('github-get-commit', owner, repo, ref),
+
+  // Pull Requests
+  listPRs: (owner, repo, state) => ipcRenderer.invoke('github-list-prs', owner, repo, state),
+  createPR: (owner, repo, data) => ipcRenderer.invoke('github-create-pr', owner, repo, data),
+  mergePR: (owner, repo, num, method) => ipcRenderer.invoke('github-merge-pr', owner, repo, num, method),
+  closePR: (owner, repo, num) => ipcRenderer.invoke('github-close-pr', owner, repo, num),
+
+  // Issues
+  listIssues: (owner, repo, state) => ipcRenderer.invoke('github-list-issues', owner, repo, state),
+  createIssue: (owner, repo, data) => ipcRenderer.invoke('github-create-issue', owner, repo, data),
+  closeIssue: (owner, repo, num) => ipcRenderer.invoke('github-close-issue', owner, repo, num),
+  commentIssue: (owner, repo, num, body) => ipcRenderer.invoke('github-comment-issue', owner, repo, num, body),
+  listIssueComments: (owner, repo, num) => ipcRenderer.invoke('github-list-issue-comments', owner, repo, num),
+
+  // Labels
+  listLabels: (owner, repo) => ipcRenderer.invoke('github-list-labels', owner, repo),
+  createLabel: (owner, repo, data) => ipcRenderer.invoke('github-create-label', owner, repo, data),
+
+  // Releases
+  listReleases: (owner, repo) => ipcRenderer.invoke('github-list-releases', owner, repo),
+  createRelease: (owner, repo, data) => ipcRenderer.invoke('github-create-release', owner, repo, data),
+
+  // Gists
+  listGists: () => ipcRenderer.invoke('github-list-gists'),
+  createGist: (data) => ipcRenderer.invoke('github-create-gist', data),
+  deleteGist: (id) => ipcRenderer.invoke('github-delete-gist', id),
+
+  // Stars
+  listStarred: () => ipcRenderer.invoke('github-list-starred'),
+  starRepo: (owner, repo) => ipcRenderer.invoke('github-star-repo', owner, repo),
+  unstarRepo: (owner, repo) => ipcRenderer.invoke('github-unstar-repo', owner, repo),
+
+  // Notifications
+  listNotifications: () => ipcRenderer.invoke('github-list-notifications'),
+  markNotificationRead: (id) => ipcRenderer.invoke('github-mark-notification-read', id),
+
+  // Collaborators
+  listCollaborators: (owner, repo) => ipcRenderer.invoke('github-list-collaborators', owner, repo),
+  addCollaborator: (owner, repo, user, perm) => ipcRenderer.invoke('github-add-collaborator', owner, repo, user, perm),
+  removeCollaborator: (owner, repo, user) => ipcRenderer.invoke('github-remove-collaborator', owner, repo, user),
+
+  // Workflows
+  listWorkflows: (owner, repo) => ipcRenderer.invoke('github-list-workflows', owner, repo),
+  listWorkflowRuns: (owner, repo, id) => ipcRenderer.invoke('github-list-workflow-runs', owner, repo, id),
+
+  // File browser
+  getContents: (owner, repo, path, ref) => ipcRenderer.invoke('github-get-contents', owner, repo, path, ref),
+  getReadme: (owner, repo) => ipcRenderer.invoke('github-get-readme', owner, repo),
+
+  // Search
+  searchRepos: (q) => ipcRenderer.invoke('github-search-repos', q),
+  searchUsers: (q) => ipcRenderer.invoke('github-search-users', q),
+
+  // Local Git
+  gitClone: (url, path) => ipcRenderer.invoke('git-clone', url, path),
+  gitStatus: (path) => ipcRenderer.invoke('git-status', path),
+  gitLog: (path, max) => ipcRenderer.invoke('git-log', path, max),
+  gitAdd: (path, files) => ipcRenderer.invoke('git-add', path, files),
+  gitCommit: (path, msg) => ipcRenderer.invoke('git-commit', path, msg),
+  gitPush: (path, remote, branch) => ipcRenderer.invoke('git-push', path, remote, branch),
+  gitPull: (path, remote, branch) => ipcRenderer.invoke('git-pull', path, remote, branch),
+  gitFetch: (path) => ipcRenderer.invoke('git-fetch', path),
+  gitDiff: (path) => ipcRenderer.invoke('git-diff', path),
+  gitBranchLocal: (path) => ipcRenderer.invoke('git-branch-local', path),
+  gitCheckout: (path, branch) => ipcRenderer.invoke('git-checkout', path, branch),
+  gitInit: (path) => ipcRenderer.invoke('git-init', path),
+  gitRemoteAdd: (path, name, url) => ipcRenderer.invoke('git-remote-add', path, name, url),
+  gitStash: (path) => ipcRenderer.invoke('git-stash', path),
+  gitStashPop: (path) => ipcRenderer.invoke('git-stash-pop', path),
+
+  // Dialog
+  selectDirectory: () => ipcRenderer.invoke('select-directory'),
+
+  // Shell
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // Orgs
+  listOrgs: () => ipcRenderer.invoke('github-list-orgs'),
+
+  // Tags
+  listTags: (owner, repo) => ipcRenderer.invoke('github-list-tags', owner, repo),
+
+  // Followers
+  listFollowers: () => ipcRenderer.invoke('github-list-followers'),
+  listFollowing: () => ipcRenderer.invoke('github-list-following'),
+
+  // Milestones
+  listMilestones: (owner, repo) => ipcRenderer.invoke('github-list-milestones', owner, repo),
+  createMilestone: (owner, repo, data) => ipcRenderer.invoke('github-create-milestone', owner, repo, data),
+  updateMilestone: (owner, repo, num, state) => ipcRenderer.invoke('github-update-milestone', owner, repo, num, state),
+
+  // Repo Topics
+  getTopics: (owner, repo) => ipcRenderer.invoke('github-get-topics', owner, repo),
+  replaceTopics: (owner, repo, names) => ipcRenderer.invoke('github-replace-topics', owner, repo, names),
+
+  // Repo Update
+  updateRepo: (owner, repo, data) => ipcRenderer.invoke('github-update-repo', owner, repo, data),
+
+  // Repo Languages
+  getLanguages: (owner, repo) => ipcRenderer.invoke('github-get-languages', owner, repo),
+
+  // Compare
+  compareCommits: (owner, repo, base, head) => ipcRenderer.invoke('github-compare-commits', owner, repo, base, head),
+
+  // PR Reviews & Files
+  listPRReviews: (owner, repo, num) => ipcRenderer.invoke('github-list-pr-reviews', owner, repo, num),
+  listPRFiles: (owner, repo, num) => ipcRenderer.invoke('github-list-pr-files', owner, repo, num),
+
+  // Reopen Issue/PR
+  reopenIssue: (owner, repo, num) => ipcRenderer.invoke('github-reopen-issue', owner, repo, num),
+  reopenPR: (owner, repo, num) => ipcRenderer.invoke('github-reopen-pr', owner, repo, num),
+
+  // Update Issue
+  updateIssue: (owner, repo, num, data) => ipcRenderer.invoke('github-update-issue', owner, repo, num, data),
+
+  // Delete Label
+  deleteLabel: (owner, repo, name) => ipcRenderer.invoke('github-delete-label', owner, repo, name),
+
+  // Follow/Unfollow
+  followUser: (username) => ipcRenderer.invoke('github-follow-user', username),
+  unfollowUser: (username) => ipcRenderer.invoke('github-unfollow-user', username),
+
+  // Get Other User
+  getUserByName: (username) => ipcRenderer.invoke('github-get-user-by-name', username),
+
+  // Gist Update/Fork/Detail
+  updateGist: (id, data) => ipcRenderer.invoke('github-update-gist', id, data),
+  forkGist: (id) => ipcRenderer.invoke('github-fork-gist', id),
+  getGist: (id) => ipcRenderer.invoke('github-get-gist', id),
+
+  // Mark all notifications
+  markAllNotificationsRead: () => ipcRenderer.invoke('github-mark-all-notifications-read'),
+
+  // Search code & issues
+  searchCode: (q) => ipcRenderer.invoke('github-search-code', q),
+  searchIssues: (q) => ipcRenderer.invoke('github-search-issues', q),
+
+  // Delete Release
+  deleteRelease: (owner, repo, id) => ipcRenderer.invoke('github-delete-release', owner, repo, id),
+
+  // Contributors
+  listContributors: (owner, repo) => ipcRenderer.invoke('github-list-contributors', owner, repo),
+
+  // Local git: branch create, tag, reset
+  gitCreateBranch: (path, name) => ipcRenderer.invoke('git-create-branch', path, name),
+  gitTag: (path, tag, msg) => ipcRenderer.invoke('git-tag', path, tag, msg),
+  gitReset: (path, mode) => ipcRenderer.invoke('git-reset', path, mode),
+
+  // Events
+  listEvents: () => ipcRenderer.invoke('github-list-events'),
+
+  // Check star
+  checkStar: (owner, repo) => ipcRenderer.invoke('github-check-star', owner, repo),
+
+  // Download zip
+  downloadZip: (owner, repo, ref) => ipcRenderer.invoke('github-download-zip', owner, repo, ref),
+
+  // Watchers & Forks list
+  listWatchers: (owner, repo) => ipcRenderer.invoke('github-list-watchers', owner, repo),
+  listForks: (owner, repo) => ipcRenderer.invoke('github-list-forks', owner, repo),
+});

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://avatars.githubusercontent.com https://github.githubassets.com data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+  <title>Vulpax Git Client</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- TITLE BAR -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-drag">
+      <div class="titlebar-logo">
+        <img src="../assets/logovulpax.png" width="22" height="22" alt="Vulpax" style="border-radius:4px;">
+        <span class="titlebar-title">Vulpax Git Client</span>
+      </div>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-minimize" title="Küçült">
+        <svg width="12" height="12" viewBox="0 0 12 12"><rect y="5" width="12" height="2" rx="1" fill="currentColor"/></svg>
+      </button>
+      <button class="titlebar-btn" id="btn-maximize" title="Büyült">
+        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <button class="titlebar-btn btn-close" id="btn-close" title="Kapat">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="app-layout">
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-user" id="sidebar-user" style="display:none;">
+        <img class="sidebar-avatar" id="sidebar-avatar" src="" alt="">
+        <span class="sidebar-username" id="sidebar-username"></span>
+      </div>
+      <div class="sidebar-nav">
+        <button class="nav-item active" data-page="dashboard" title="Dashboard">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" fill="currentColor"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-page="repos" title="Repolar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z" fill="currentColor"/></svg>
+          <span>Repolar</span>
+        </button>
+        <button class="nav-item" data-page="branches" title="Branch'ler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 9v6M6 9c4 0 6 0 12 0" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span>Branch'ler</span>
+        </button>
+        <button class="nav-item" data-page="commits" title="Commit'ler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v6m0 8v6M2 12h6m8 0h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Commit'ler</span>
+        </button>
+        <button class="nav-item" data-page="pullrequests" title="Pull Request'ler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 3v18M18 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 9l6-3 6 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Pull Request</span>
+        </button>
+        <button class="nav-item" data-page="issues" title="Issue'lar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v5M12 16v0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          <span>Issue'lar</span>
+        </button>
+        <button class="nav-item" data-page="actions" title="Actions">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+          <span>Actions</span>
+        </button>
+        <button class="nav-item" data-page="releases" title="Release'ler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <span>Release'ler</span>
+        </button>
+        <button class="nav-item" data-page="gists" title="Gist'ler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 10l2 2-2 2m6-4l-2 2 2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Gist'ler</span>
+        </button>
+        <button class="nav-item" data-page="stars" title="Yıldızlı Repolar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" fill="currentColor" opacity="0.8"/></svg>
+          <span>Yıldızlar</span>
+        </button>
+        <button class="nav-item" data-page="notifications" title="Bildirimler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Bildirimler</span>
+        </button>
+        <button class="nav-item" data-page="search" title="Arama">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Arama</span>
+        </button>
+        <button class="nav-item" data-page="localrepo" title="Yerel Repo">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Yerel Repo</span>
+        </button>
+        <button class="nav-item" data-page="collaborators" title="Collaborator'lar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+          <span>İşbirlikçiler</span>
+        </button>
+        <button class="nav-item" data-page="filebrowser" title="Dosya Tarayıcı">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span>Dosyalar</span>
+        </button>
+        <button class="nav-item" data-page="organizations" title="Organizasyonlar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="8" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+          <span>Organizasyonlar</span>
+        </button>
+        <button class="nav-item" data-page="profile" title="Profil">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+          <span>Profil</span>
+        </button>
+      </div>
+      <div class="sidebar-bottom">
+        <button class="nav-item" data-page="tutorials" title="Öğreticiler">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Öğreticiler</span>
+        </button>
+        <button class="nav-item" data-page="settings" title="Ayarlar">
+          <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span>Ayarlar</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- CONTENT -->
+    <main class="content" id="content">
+      <!-- Pages will be rendered dynamically -->
+    </main>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal-overlay" style="display:none;">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title"></h3>
+        <button class="modal-close" id="modal-close">
+          <svg width="14" height="14" viewBox="0 0 12 12"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- LOGIN OVERLAY -->
+  <div class="login-overlay" id="login-overlay">
+    <div class="login-card">
+      <img src="../assets/logovulpax.png" width="80" height="80" alt="Vulpax" style="border-radius:12px;margin-bottom:8px;">
+      <h1 class="login-title">Vulpax Git Client</h1>
+      <p class="login-subtitle">GitHub Personal Access Token ile giriş yapın</p>
+      <div class="login-form">
+        <div class="input-group">
+          <label for="token-input">Personal Access Token</label>
+          <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
+        </div>
+        <button class="btn btn-primary btn-block" id="btn-login">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Giriş Yap
+        </button>
+        <a class="login-help-link" id="token-help-link">Token nasıl alınır?</a>
+      </div>
+      <div class="login-help" id="login-help" style="display:none;">
+        <h4>GitHub Personal Access Token Alma</h4>
+        <ol>
+          <li>GitHub.com'a giriş yapın</li>
+          <li>Settings → Developer settings → Personal access tokens → Tokens (classic) veya Fine-grained tokens</li>
+          <li>"Generate new token" butonuna tıklayın</li>
+          <li>Token'a bir isim verin (ör: "Vulpax Git Client")</li>
+          <li>Gerekli scope'ları seçin: <code>repo</code>, <code>user</code>, <code>gist</code>, <code>notifications</code>, <code>admin:org</code>, <code>delete_repo</code>, <code>workflow</code></li>
+          <li>"Generate token" butonuna tıklayın</li>
+          <li>Token'ı kopyalayıp yukarıdaki alana yapıştırın</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

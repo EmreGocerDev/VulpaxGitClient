@@ -1,0 +1,45 @@
+{
+  "name": "vulpax-git-client",
+  "version": "1.0.0",
+  "description": "Vulpax Git Client - Modern GitHub Desktop Client with Full Features",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "pack": "electron-builder --win --dir"
+  },
+  "author": "Vulpax",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "png-to-ico": "^3.0.1"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2",
+    "electron-store": "^8.1.0",
+    "simple-git": "^3.22.0"
+  },
+  "build": {
+    "appId": "com.vulpax.gitclient",
+    "productName": "Vulpax Git Client",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**"
+    ]
+  }
+}
