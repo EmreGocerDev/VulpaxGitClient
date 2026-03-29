@@ -1360,12 +1360,16 @@ async function renderSearch() {
 // doGlobalSearch is defined below with expanded search types
 
 // ==========================================
-// LOCAL REPO
+// LOCAL REPO (Enhanced - 30+ Operations)
 // ==========================================
+
+let localRepoTab = 'overview';
+let editorCurrentFile = null;
+let editorFileTree = [];
 
 async function renderLocalRepo() {
   const content = document.getElementById('content');
-  
+
   content.innerHTML = `
     <div class="fade-in">
       <div class="page-header">
@@ -1374,31 +1378,77 @@ async function renderLocalRepo() {
           <p class="page-subtitle" id="local-path">${localRepoPath ? escapeHtml(localRepoPath) : 'Henüz bir klasör seçilmedi'}</p>
         </div>
         <div class="page-actions">
-          <button class="btn" onclick="selectLocalDir()">Klasör Seç</button>
-          <button class="btn btn-primary" onclick="showCloneModal()">Clone</button>
-          <button class="btn" onclick="showInitModal()">Git Init</button>
+          <button class="btn" onclick="selectLocalDir()">${svgIcon('folder')} Klasör Aç</button>
+          <button class="btn btn-primary" onclick="showCloneModal()">${svgIcon('download')} Clone</button>
+          <button class="btn" onclick="showInitModal()">${svgIcon('plus')} Git Init</button>
         </div>
       </div>
-      
-      <div id="local-repo-content">
-        ${localRepoPath ? '' : `
-          <div class="empty-state">
-            <svg viewBox="0 0 24 24" width="48" height="48"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-            <h3>Yerel Repo Seçin</h3>
-            <p>Bir klasör seçin veya yeni bir repo clone/init edin</p>
+
+      ${localRepoPath ? `
+        <div class="local-tabs" id="local-tabs">
+          <button class="local-tab ${localRepoTab === 'overview' ? 'active' : ''}" onclick="switchLocalTab('overview')">📊 Genel Bakış</button>
+          <button class="local-tab ${localRepoTab === 'changes' ? 'active' : ''}" onclick="switchLocalTab('changes')">📝 Değişiklikler</button>
+          <button class="local-tab ${localRepoTab === 'history' ? 'active' : ''}" onclick="switchLocalTab('history')">📜 Geçmiş</button>
+          <button class="local-tab ${localRepoTab === 'branches' ? 'active' : ''}" onclick="switchLocalTab('branches')">🔀 Branch</button>
+          <button class="local-tab ${localRepoTab === 'remotes' ? 'active' : ''}" onclick="switchLocalTab('remotes')">🌐 Remote</button>
+          <button class="local-tab ${localRepoTab === 'tags' ? 'active' : ''}" onclick="switchLocalTab('tags')">🏷️ Tag</button>
+          <button class="local-tab ${localRepoTab === 'stash' ? 'active' : ''}" onclick="switchLocalTab('stash')">📦 Stash</button>
+          <button class="local-tab ${localRepoTab === 'config' ? 'active' : ''}" onclick="switchLocalTab('config')">⚙️ Config</button>
+          <button class="local-tab ${localRepoTab === 'editor' ? 'active' : ''}" onclick="switchLocalTab('editor')">✏️ Editör</button>
+          <button class="local-tab ${localRepoTab === 'files' ? 'active' : ''}" onclick="switchLocalTab('files')">📁 Dosyalar</button>
+        </div>
+        <div id="local-tab-content">${loading()}</div>
+      ` : `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" width="64" height="64"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <h3>Yerel Repo Seçin</h3>
+          <p>Bir klasör seçin, yeni bir repo clone edin veya git init yapın</p>
+          <div class="flex-row gap-md mt-md" style="justify-content:center;">
+            <button class="btn btn-primary" onclick="selectLocalDir()">${svgIcon('folder')} Klasör Aç</button>
+            <button class="btn" onclick="showCloneModal()">${svgIcon('download')} Clone</button>
+            <button class="btn" onclick="showInitModal()">${svgIcon('plus')} Git Init</button>
           </div>
-        `}
-      </div>
+        </div>
+      `}
     </div>
   `;
-  
-  if (localRepoPath) loadLocalRepoInfo();
+
+  if (localRepoPath) {
+    renderLocalTabContent();
+  }
+}
+
+function switchLocalTab(tab) {
+  localRepoTab = tab;
+  document.querySelectorAll('.local-tab').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.querySelector(`.local-tab:nth-child(${['overview','changes','history','branches','remotes','tags','stash','config','editor','files'].indexOf(tab) + 1})`);
+  if (activeBtn) activeBtn.classList.add('active');
+  document.getElementById('local-tab-content').innerHTML = loading();
+  renderLocalTabContent();
+}
+
+async function renderLocalTabContent() {
+  const tabs = {
+    overview: renderLocalOverview,
+    changes: renderLocalChanges,
+    history: renderLocalHistory,
+    branches: renderLocalBranches,
+    remotes: renderLocalRemotes,
+    tags: renderLocalTags,
+    stash: renderLocalStash,
+    config: renderLocalConfig,
+    editor: renderLocalEditor,
+    files: renderLocalFiles,
+  };
+  const fn = tabs[localRepoTab];
+  if (fn) await fn();
 }
 
 async function selectLocalDir() {
   const result = await V.selectDirectory();
-  if (result.success) {
+  if (result.success && result.path) {
     localRepoPath = result.path;
+    localRepoTab = 'overview';
     renderLocalRepo();
   }
 }
@@ -1423,7 +1473,6 @@ async function doClone() {
   const url = document.getElementById('clone-url').value.trim();
   const clonePath = document.getElementById('clone-path').value.trim();
   if (!url || !clonePath) return toast('Tüm alanları doldurun', 'error');
-  
   toast('Clone başlatılıyor...', 'info');
   const result = await V.gitClone(url, clonePath);
   if (result.success) {
@@ -1454,7 +1503,6 @@ async function selectInitPath() {
 async function doInit() {
   const initPath = document.getElementById('init-path').value.trim();
   if (!initPath) return toast('Klasör seçin', 'error');
-  
   const result = await V.gitInit(initPath);
   if (result.success) {
     localRepoPath = initPath;
@@ -1466,37 +1514,50 @@ async function doInit() {
   }
 }
 
-async function loadLocalRepoInfo() {
-  const div = document.getElementById('local-repo-content');
+// ---------- OVERVIEW TAB ----------
+
+async function renderLocalOverview() {
+  const div = document.getElementById('local-tab-content');
   div.innerHTML = loading();
-  
-  const [statusRes, logRes, branchRes] = await Promise.all([
+
+  const [statusRes, logRes, branchRes, remoteRes, tagRes] = await Promise.all([
     V.gitStatus(localRepoPath),
-    V.gitLog(localRepoPath, 20),
-    V.gitBranchLocal(localRepoPath)
+    V.gitLog(localRepoPath, 5),
+    V.gitBranchLocal(localRepoPath),
+    V.gitRemoteList(localRepoPath),
+    V.gitTagList(localRepoPath)
   ]);
-  
+
   const status = statusRes.success ? statusRes.status : null;
   const log = logRes.success ? logRes.log : null;
   const branches = branchRes.success ? branchRes.branches : null;
-  
+  const remotes = remoteRes.success ? remoteRes.remotes : [];
+  const tags = tagRes.success ? tagRes.tags : { all: [] };
+
+  if (!status && !log) {
+    div.innerHTML = `<div class="card" style="padding:20px;"><p class="text-danger">Bu klasör bir Git reposu değil veya erişilemiyor.</p><p class="text-muted mt-sm">Git init yapmak ister misiniz?</p><button class="btn btn-primary mt-md" onclick="doInitHere()">Git Init Yap</button></div>`;
+    return;
+  }
+
+  const isClean = (status?.staged?.length || 0) === 0 && (status?.modified?.length || 0) === 0 && (status?.not_added?.length || 0) === 0;
+
   div.innerHTML = `
     <div class="stats-grid">
-      <div class="stat-card">
+      <div class="stat-card" onclick="switchLocalTab('branches')" style="cursor:pointer;">
         <div class="stat-icon blue">${svgIcon('branch')}</div>
         <div class="stat-info">
           <div class="stat-number">${branches?.all?.length || 0}</div>
           <div class="stat-label">Branch (${escapeHtml(branches?.current || '-')})</div>
         </div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" onclick="switchLocalTab('changes')" style="cursor:pointer;">
         <div class="stat-icon green">${svgIcon('check')}</div>
         <div class="stat-info">
           <div class="stat-number">${status?.staged?.length || 0}</div>
           <div class="stat-label">Staged</div>
         </div>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" onclick="switchLocalTab('changes')" style="cursor:pointer;">
         <div class="stat-icon orange">${svgIcon('file')}</div>
         <div class="stat-info">
           <div class="stat-number">${status?.modified?.length || 0}</div>
@@ -1510,43 +1571,67 @@ async function loadLocalRepoInfo() {
           <div class="stat-label">Untracked</div>
         </div>
       </div>
-    </div>
-    
-    <div class="flex-row gap-md mb-lg flex-wrap">
-      <button class="btn btn-success" onclick="doGitAddAll()">Tümünü Stage</button>
-      <button class="btn btn-primary" onclick="showCommitModal()">Commit</button>
-      <button class="btn btn-info" onclick="doGitPush()">Push</button>
-      <button class="btn" onclick="doGitPull()">Pull</button>
-      <button class="btn" onclick="doGitFetch()">Fetch</button>
-      <button class="btn" onclick="doGitStash()">Stash</button>
-      <button class="btn" onclick="doGitStashPop()">Stash Pop</button>
-      <button class="btn" onclick="showRemoteModal()">Remote Ekle</button>
-      <button class="btn" onclick="showLocalBranchModal()">${svgIcon('branch')} Yeni Branch</button>
-      <button class="btn" onclick="showLocalTagModal()">Tag Oluştur</button>
-      <button class="btn" onclick="showGitDiff()">Diff Göster</button>
-      <button class="btn btn-warning" onclick="doGitReset('soft')">Reset Soft</button>
-      <button class="btn btn-danger" onclick="doGitReset('hard')">Reset Hard</button>
-      <button class="btn" onclick="loadLocalRepoInfo()">${svgIcon('refresh')} Yenile</button>
-    </div>
-    
-    ${status ? `
-      <div class="card">
-        <div class="card-header"><h3 class="card-title">Değişen Dosyalar</h3></div>
-        ${[...(status.modified || []), ...(status.not_added || []), ...(status.staged || [])].length === 0
-          ? '<p class="text-muted" style="padding:12px;">Temiz çalışma dizini</p>'
-          : [...(status.staged || []).map(f => `<div class="file-item"><span class="file-icon file" style="color:var(--success)">${svgIcon('check')}</span><span class="file-name">${escapeHtml(f)}</span><span class="badge badge-success">staged</span></div>`),
-             ...(status.modified || []).map(f => `<div class="file-item"><span class="file-icon file" style="color:var(--warning)">${svgIcon('file')}</span><span class="file-name">${escapeHtml(f)}</span><span class="badge badge-warning">modified</span></div>`),
-             ...(status.not_added || []).map(f => `<div class="file-item"><span class="file-icon file" style="color:var(--danger)">${svgIcon('plus')}</span><span class="file-name">${escapeHtml(f)}</span><span class="badge badge-danger">untracked</span></div>`)
-            ].join('')
-        }
+      <div class="stat-card" onclick="switchLocalTab('remotes')" style="cursor:pointer;">
+        <div class="stat-icon purple">${svgIcon('link')}</div>
+        <div class="stat-info">
+          <div class="stat-number">${remotes.length}</div>
+          <div class="stat-label">Remote</div>
+        </div>
       </div>
-    ` : ''}
-    
-    ${log ? `
+      <div class="stat-card" onclick="switchLocalTab('tags')" style="cursor:pointer;">
+        <div class="stat-icon yellow"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg></div>
+        <div class="stat-info">
+          <div class="stat-number">${tags.all?.length || 0}</div>
+          <div class="stat-label">Tag</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">${svgIcon('commit')} Hızlı İşlemler</h3></div>
+      <div class="local-quick-actions">
+        <button class="btn btn-success" onclick="doGitAddAll()">${svgIcon('plus')} Tümünü Stage</button>
+        <button class="btn btn-primary" onclick="showCommitModal()">${svgIcon('commit')} Commit</button>
+        <button class="btn btn-info" onclick="showPushModal()">${svgIcon('link')} Push</button>
+        <button class="btn" onclick="showPullModal()">${svgIcon('download')} Pull</button>
+        <button class="btn" onclick="doGitFetch()">${svgIcon('refresh')} Fetch</button>
+        <button class="btn" onclick="doGitStash()">📦 Stash</button>
+        <button class="btn" onclick="doGitStashPop()">📤 Stash Pop</button>
+        <button class="btn" onclick="showDiffModal()">🔍 Diff</button>
+        <button class="btn" onclick="showStagedDiffModal()">📋 Staged Diff</button>
+        <button class="btn btn-warning" onclick="doGitReset('soft')">↩️ Reset Soft</button>
+        <button class="btn btn-warning" onclick="doGitReset('mixed')">↩️ Reset Mixed</button>
+        <button class="btn btn-danger" onclick="doGitReset('hard')">⚠️ Reset Hard</button>
+        <button class="btn btn-danger" onclick="doGitClean()">🧹 Clean</button>
+        <button class="btn" onclick="renderLocalRepo()">${svgIcon('refresh')} Yenile</button>
+      </div>
+    </div>
+
+    ${isClean ? `
+      <div class="card" style="text-align:center;padding:20px;">
+        <div style="color:var(--success);margin-bottom:8px;">${svgIcon('check')}</div>
+        <p style="color:var(--success);font-weight:600;">Temiz çalışma dizini</p>
+        <p class="text-muted text-sm">Commit edilecek veya stage edilecek değişiklik yok.</p>
+      </div>
+    ` : `
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">Değişen Dosyalar (Özet)</h3>
+          <button class="btn btn-sm" onclick="switchLocalTab('changes')">Detaylı Gör</button>
+        </div>
+        ${[...(status.staged || []).map(f => `<div class="file-item"><span class="file-icon file" style="color:var(--success)">${svgIcon('check')}</span><span class="file-name">${escapeHtml(f)}</span><span class="badge badge-success">staged</span></div>`),
+           ...(status.modified || []).map(f => `<div class="file-item"><span class="file-icon file" style="color:var(--warning)">${svgIcon('file')}</span><span class="file-name">${escapeHtml(f)}</span><span class="badge badge-warning">modified</span></div>`),
+           ...(status.not_added || []).map(f => `<div class="file-item"><span class="file-icon file" style="color:var(--danger)">${svgIcon('plus')}</span><span class="file-name">${escapeHtml(f)}</span><span class="badge badge-danger">untracked</span></div>`)
+          ].join('')}
+      </div>
+    `}
+
+    ${log && log.all && log.all.length > 0 ? `
       <div class="card" style="padding:0;">
-        <div class="card-header" style="padding:16px;"><h3 class="card-title">Commit Geçmişi</h3></div>
-        ${(log.all || []).map(c => `
-          <div class="commit-item">
+        <div class="card-header" style="padding:16px;"><h3 class="card-title">${svgIcon('commit')} Son Commit'ler</h3>
+          <button class="btn btn-sm" onclick="switchLocalTab('history')">Tümünü Gör</button>
+        </div>
+        ${log.all.slice(0, 5).map(c => `
+          <div class="commit-item" onclick="showLocalCommitDetail('${escapeHtml(c.hash)}')">
             <div class="commit-dot"></div>
             <div class="commit-info">
               <div class="commit-message">${escapeHtml(c.message.split('\n')[0])}</div>
@@ -1563,15 +1648,164 @@ async function loadLocalRepoInfo() {
   `;
 }
 
+async function doInitHere() {
+  const result = await V.gitInit(localRepoPath);
+  if (result.success) { toast('Git init tamamlandı!', 'success'); renderLocalRepo(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- CHANGES TAB ----------
+
+async function renderLocalChanges() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const statusRes = await V.gitStatus(localRepoPath);
+  if (!statusRes.success) { div.innerHTML = `<p class="text-danger">Hata: ${escapeHtml(statusRes.error)}</p>`; return; }
+  const s = statusRes.status;
+  const staged = s.staged || [];
+  const modified = s.modified || [];
+  const notAdded = s.not_added || [];
+  const deleted = s.deleted || [];
+  const conflicted = s.conflicted || [];
+
+  div.innerHTML = `
+    <div class="flex-row gap-md mb-md flex-wrap">
+      <button class="btn btn-success" onclick="doGitAddAll()">${svgIcon('plus')} Tümünü Stage</button>
+      <button class="btn btn-primary" onclick="showCommitModal()">${svgIcon('commit')} Commit</button>
+      <button class="btn" onclick="showAmendModal()">✏️ Amend</button>
+      <button class="btn" onclick="showDiffModal()">🔍 Working Diff</button>
+      <button class="btn" onclick="showStagedDiffModal()">📋 Staged Diff</button>
+      <button class="btn" onclick="renderLocalChanges()">${svgIcon('refresh')} Yenile</button>
+    </div>
+
+    ${conflicted.length > 0 ? `
+      <div class="card">
+        <div class="card-header"><h3 class="card-title" style="color:var(--danger);">⚠️ Çakışan Dosyalar (${conflicted.length})</h3></div>
+        ${conflicted.map(f => `
+          <div class="file-item">
+            <span class="file-icon file" style="color:var(--danger);">${svgIcon('x')}</span>
+            <span class="file-name">${escapeHtml(f)}</span>
+            <span class="badge badge-danger">conflict</span>
+            <button class="btn btn-sm" onclick="openFileInEditorFromChanges('${escapeJsStr(f)}')">✏️ Düzenle</button>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="color:var(--success);">${svgIcon('check')} Staged Dosyalar (${staged.length})</h3>
+        ${staged.length > 0 ? `<button class="btn btn-sm btn-danger" onclick="doUnstageAll()">Tümünü Unstage</button>` : ''}
+      </div>
+      ${staged.length === 0 ? '<p class="text-muted text-sm" style="padding:8px 12px;">Stage edilmiş dosya yok</p>' :
+        staged.map(f => `
+          <div class="file-item">
+            <span class="file-icon file" style="color:var(--success);">${svgIcon('check')}</span>
+            <span class="file-name">${escapeHtml(f)}</span>
+            <span class="badge badge-success">staged</span>
+            <div class="list-item-actions">
+              <button class="btn btn-sm" onclick="doUnstageFile('${escapeJsStr(f)}')" title="Unstage">↩️</button>
+              <button class="btn btn-sm" onclick="showFileDiffModal('${escapeJsStr(f)}')" title="Diff">🔍</button>
+            </div>
+          </div>
+        `).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="color:var(--warning);">${svgIcon('file')} Değişen Dosyalar (${modified.length})</h3>
+        ${modified.length > 0 ? `<button class="btn btn-sm btn-success" onclick="doStageFiles(${JSON.stringify(modified).replace(/"/g, '&quot;')})">Tümünü Stage</button>` : ''}
+      </div>
+      ${modified.length === 0 ? '<p class="text-muted text-sm" style="padding:8px 12px;">Değişen dosya yok</p>' :
+        modified.map(f => `
+          <div class="file-item">
+            <span class="file-icon file" style="color:var(--warning);">${svgIcon('file')}</span>
+            <span class="file-name">${escapeHtml(f)}</span>
+            <span class="badge badge-warning">modified</span>
+            <div class="list-item-actions">
+              <button class="btn btn-sm btn-success" onclick="doStageFile('${escapeJsStr(f)}')" title="Stage">${svgIcon('plus')}</button>
+              <button class="btn btn-sm" onclick="showFileDiffModal('${escapeJsStr(f)}')" title="Diff">🔍</button>
+              <button class="btn btn-sm" onclick="showFileHistoryModal('${escapeJsStr(f)}')" title="Geçmiş">📜</button>
+              <button class="btn btn-sm" onclick="openFileInEditorFromChanges('${escapeJsStr(f)}')" title="Düzenle">✏️</button>
+            </div>
+          </div>
+        `).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title" style="color:var(--danger);">${svgIcon('plus')} Untracked Dosyalar (${notAdded.length})</h3>
+        ${notAdded.length > 0 ? `<button class="btn btn-sm btn-success" onclick="doStageFiles(${JSON.stringify(notAdded).replace(/"/g, '&quot;')})">Tümünü Stage</button>` : ''}
+      </div>
+      ${notAdded.length === 0 ? '<p class="text-muted text-sm" style="padding:8px 12px;">Untracked dosya yok</p>' :
+        notAdded.map(f => `
+          <div class="file-item">
+            <span class="file-icon file" style="color:var(--danger);">${svgIcon('plus')}</span>
+            <span class="file-name">${escapeHtml(f)}</span>
+            <span class="badge badge-danger">untracked</span>
+            <div class="list-item-actions">
+              <button class="btn btn-sm btn-success" onclick="doStageFile('${escapeJsStr(f)}')" title="Stage">${svgIcon('plus')}</button>
+              <button class="btn btn-sm" onclick="openFileInEditorFromChanges('${escapeJsStr(f)}')" title="Düzenle">✏️</button>
+            </div>
+          </div>
+        `).join('')}
+    </div>
+
+    ${deleted.length > 0 ? `
+      <div class="card">
+        <div class="card-header"><h3 class="card-title" style="color:var(--danger);">${svgIcon('trash')} Silinen Dosyalar (${deleted.length})</h3></div>
+        ${deleted.map(f => `
+          <div class="file-item">
+            <span class="file-icon file" style="color:var(--danger);">${svgIcon('trash')}</span>
+            <span class="file-name">${escapeHtml(f)}</span>
+            <span class="badge badge-danger">deleted</span>
+            <button class="btn btn-sm btn-success" onclick="doStageFile('${escapeJsStr(f)}')" title="Stage">${svgIcon('plus')}</button>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
+  `;
+}
+
+function escapeJsStr(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
 async function doGitAddAll() {
   const result = await V.gitAdd(localRepoPath, '.');
-  if (result.success) { toast('Tüm dosyalar staged', 'success'); loadLocalRepoInfo(); }
+  if (result.success) { toast('Tüm dosyalar staged', 'success'); refreshLocalTab(); }
   else toast('Hata: ' + result.error, 'error');
+}
+
+async function doStageFile(file) {
+  const result = await V.gitAddFile(localRepoPath, file);
+  if (result.success) { toast(`"${file}" staged`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doStageFiles(files) {
+  const result = await V.gitAdd(localRepoPath, files);
+  if (result.success) { toast(`${files.length} dosya staged`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doUnstageFile(file) {
+  const result = await V.gitUnstage(localRepoPath, [file]);
+  if (result.success) { toast(`"${file}" unstaged`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doUnstageAll() {
+  const statusRes = await V.gitStatus(localRepoPath);
+  if (statusRes.success && statusRes.status.staged) {
+    const result = await V.gitUnstage(localRepoPath, statusRes.status.staged);
+    if (result.success) { toast('Tüm dosyalar unstaged', 'success'); refreshLocalTab(); }
+    else toast('Hata: ' + result.error, 'error');
+  }
 }
 
 function showCommitModal() {
   openModal('Commit', `
-    <div class="input-group"><label>Commit Mesajı</label><textarea id="commit-msg" placeholder="feat: ..."></textarea></div>
+    <div class="input-group"><label>Commit Mesajı</label><textarea id="commit-msg" placeholder="feat: açıklayıcı bir commit mesajı yazın" style="min-height:100px;"></textarea></div>
     <button class="btn btn-primary btn-block mt-md" onclick="doGitCommit()">Commit</button>
   `);
 }
@@ -1580,25 +1814,63 @@ async function doGitCommit() {
   const msg = document.getElementById('commit-msg').value.trim();
   if (!msg) return toast('Commit mesajı gerekli', 'error');
   const result = await V.gitCommit(localRepoPath, msg);
-  if (result.success) { toast('Commit yapıldı', 'success'); closeModal(); loadLocalRepoInfo(); }
+  if (result.success) { toast('Commit yapıldı', 'success'); closeModal(); refreshLocalTab(); }
   else toast('Hata: ' + result.error, 'error');
 }
 
+function showAmendModal() {
+  openModal('Commit Amend', `
+    <p class="text-muted text-sm mb-md">Son commit'i düzenleyin. Mesaj boş bırakılırsa mevcut mesaj korunur.</p>
+    <div class="input-group"><label>Yeni Commit Mesajı (opsiyonel)</label><textarea id="amend-msg" placeholder="Boş bırakılırsa mevcut mesaj korunur"></textarea></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doAmendCommit()">Amend</button>
+  `);
+}
+
+async function doAmendCommit() {
+  const msg = document.getElementById('amend-msg').value.trim();
+  const result = await V.gitCommitAmend(localRepoPath, msg || undefined);
+  if (result.success) { toast('Commit amend edildi', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+function showPushModal() {
+  openModal('Push', `
+    <div class="input-group"><label>Remote</label><input type="text" id="push-remote" value="origin" placeholder="origin"></div>
+    <div class="input-group"><label>Branch (boş bırakılırsa mevcut branch)</label><input type="text" id="push-branch" placeholder="main"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doGitPush()">Push</button>
+  `);
+}
+
 async function doGitPush() {
+  const remote = document.getElementById('push-remote')?.value?.trim() || 'origin';
+  const branch = document.getElementById('push-branch')?.value?.trim() || undefined;
+  closeModal();
   toast('Push yapılıyor...', 'info');
-  const result = await V.gitPush(localRepoPath);
+  const result = await V.gitPush(localRepoPath, remote, branch);
   if (result.success) toast('Push tamamlandı', 'success');
   else toast('Hata: ' + result.error, 'error');
 }
 
+function showPullModal() {
+  openModal('Pull', `
+    <div class="input-group"><label>Remote</label><input type="text" id="pull-remote" value="origin" placeholder="origin"></div>
+    <div class="input-group"><label>Branch (boş bırakılırsa mevcut branch)</label><input type="text" id="pull-branch" placeholder="main"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doGitPull()">Pull</button>
+  `);
+}
+
 async function doGitPull() {
+  const remote = document.getElementById('pull-remote')?.value?.trim() || 'origin';
+  const branch = document.getElementById('pull-branch')?.value?.trim() || undefined;
+  closeModal();
   toast('Pull yapılıyor...', 'info');
-  const result = await V.gitPull(localRepoPath);
-  if (result.success) { toast('Pull tamamlandı', 'success'); loadLocalRepoInfo(); }
+  const result = await V.gitPull(localRepoPath, remote, branch);
+  if (result.success) { toast('Pull tamamlandı', 'success'); refreshLocalTab(); }
   else toast('Hata: ' + result.error, 'error');
 }
 
 async function doGitFetch() {
+  toast('Fetch yapılıyor...', 'info');
   const result = await V.gitFetch(localRepoPath);
   if (result.success) toast('Fetch tamamlandı', 'success');
   else toast('Hata: ' + result.error, 'error');
@@ -1606,17 +1878,306 @@ async function doGitFetch() {
 
 async function doGitStash() {
   const result = await V.gitStash(localRepoPath);
-  if (result.success) { toast('Stash yapıldı', 'success'); loadLocalRepoInfo(); }
+  if (result.success) { toast('Stash yapıldı', 'success'); refreshLocalTab(); }
   else toast('Hata: ' + result.error, 'error');
 }
 
 async function doGitStashPop() {
   const result = await V.gitStashPop(localRepoPath);
-  if (result.success) { toast('Stash pop yapıldı', 'success'); loadLocalRepoInfo(); }
+  if (result.success) { toast('Stash pop yapıldı', 'success'); refreshLocalTab(); }
   else toast('Hata: ' + result.error, 'error');
 }
 
-function showRemoteModal() {
+function showDiffModal() {
+  V.gitDiff(localRepoPath).then(result => {
+    if (!result.success) return toast('Hata: ' + result.error, 'error');
+    openModal('Working Directory Diff', `
+      <div class="diff-block" style="max-height:60vh;overflow:auto;">
+        ${result.diff ? result.diff.split('\n').slice(0, 500).map(line => {
+          let cls = '';
+          if (line.startsWith('+')) cls = 'diff-add';
+          else if (line.startsWith('-')) cls = 'diff-remove';
+          else if (line.startsWith('@@')) cls = 'diff-info';
+          return '<div class="diff-line ' + cls + '">' + escapeHtml(line) + '</div>';
+        }).join('') : '<p class="text-muted" style="padding:12px;">Değişiklik yok</p>'}
+      </div>
+    `);
+  });
+}
+
+function showStagedDiffModal() {
+  V.gitDiffStaged(localRepoPath).then(result => {
+    if (!result.success) return toast('Hata: ' + result.error, 'error');
+    openModal('Staged Diff', `
+      <div class="diff-block" style="max-height:60vh;overflow:auto;">
+        ${result.diff ? result.diff.split('\n').slice(0, 500).map(line => {
+          let cls = '';
+          if (line.startsWith('+')) cls = 'diff-add';
+          else if (line.startsWith('-')) cls = 'diff-remove';
+          else if (line.startsWith('@@')) cls = 'diff-info';
+          return '<div class="diff-line ' + cls + '">' + escapeHtml(line) + '</div>';
+        }).join('') : '<p class="text-muted" style="padding:12px;">Staged değişiklik yok</p>'}
+      </div>
+    `);
+  });
+}
+
+function showFileDiffModal(file) {
+  V.gitDiffFile(localRepoPath, file).then(result => {
+    if (!result.success) return toast('Hata: ' + result.error, 'error');
+    openModal('Diff: ' + file, `
+      <div class="diff-block" style="max-height:60vh;overflow:auto;">
+        ${result.diff ? result.diff.split('\n').slice(0, 500).map(line => {
+          let cls = '';
+          if (line.startsWith('+')) cls = 'diff-add';
+          else if (line.startsWith('-')) cls = 'diff-remove';
+          else if (line.startsWith('@@')) cls = 'diff-info';
+          return '<div class="diff-line ' + cls + '">' + escapeHtml(line) + '</div>';
+        }).join('') : '<p class="text-muted" style="padding:12px;">Değişiklik yok</p>'}
+      </div>
+    `);
+  });
+}
+
+function showFileHistoryModal(file) {
+  V.gitLogFile(localRepoPath, file).then(result => {
+    if (!result.success) return toast('Hata: ' + result.error, 'error');
+    const log = result.log;
+    openModal('Dosya Geçmişi: ' + file, `
+      <div style="max-height:60vh;overflow:auto;">
+        ${(log.all || []).map(c => `
+          <div class="commit-item" onclick="showLocalCommitDetail('${escapeHtml(c.hash)}')">
+            <div class="commit-dot"></div>
+            <div class="commit-info">
+              <div class="commit-message">${escapeHtml(c.message.split('\n')[0])}</div>
+              <div class="commit-meta">
+                <span class="commit-sha">${c.hash.substring(0, 7)}</span>
+                <span>${escapeHtml(c.author_name)}</span>
+                <span>${timeAgo(c.date)}</span>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `);
+  });
+}
+
+async function doGitReset(mode) {
+  const modeLabel = { soft: 'Soft', mixed: 'Mixed', hard: 'Hard' };
+  if (!confirm(`Git reset --${mode} yapılacak.${mode === 'hard' ? ' TÜM DEĞİŞİKLİKLER KAYBOLACAK!' : ''} Devam edilsin mi?`)) return;
+  const result = await V.gitReset(localRepoPath, mode);
+  if (result.success) { toast(`Git reset --${mode} yapıldı`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doGitClean() {
+  if (!confirm('Tüm untracked dosyalar SİLİNECEK! Bu işlem geri alınamaz. Devam edilsin mi?')) return;
+  const result = await V.gitClean(localRepoPath);
+  if (result.success) { toast('Untracked dosyalar temizlendi', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+function refreshLocalTab() {
+  renderLocalTabContent();
+}
+
+// ---------- HISTORY TAB ----------
+
+async function renderLocalHistory() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const logRes = await V.gitLog(localRepoPath, 100);
+  if (!logRes.success) { div.innerHTML = `<p class="text-danger">Hata: ${escapeHtml(logRes.error)}</p>`; return; }
+
+  const commits = logRes.log?.all || [];
+
+  div.innerHTML = `
+    <div class="flex-row gap-md mb-md">
+      <button class="btn" onclick="renderLocalHistory()">${svgIcon('refresh')} Yenile</button>
+    </div>
+    <div class="card" style="padding:0;">
+      <div class="card-header" style="padding:16px;"><h3 class="card-title">${svgIcon('commit')} Commit Geçmişi (${commits.length})</h3></div>
+      ${commits.length === 0 ? '<div class="empty-state"><h3>Henüz commit yok</h3></div>' :
+        commits.map(c => `
+          <div class="commit-item" onclick="showLocalCommitDetail('${escapeHtml(c.hash)}')">
+            <div class="commit-dot"></div>
+            <div class="commit-info">
+              <div class="commit-message">${escapeHtml(c.message.split('\n')[0])}</div>
+              <div class="commit-meta">
+                <span class="commit-sha">${c.hash.substring(0, 7)}</span>
+                <span>${escapeHtml(c.author_name)}</span>
+                <span>${escapeHtml(c.author_email)}</span>
+                <span>${timeAgo(c.date)}</span>
+              </div>
+            </div>
+            <div class="list-item-actions">
+              <button class="btn btn-sm" onclick="event.stopPropagation();doCherryPick('${escapeHtml(c.hash)}')" title="Cherry-pick">🍒</button>
+              <button class="btn btn-sm" onclick="event.stopPropagation();doRevertCommit('${escapeHtml(c.hash)}')" title="Revert">↩️</button>
+            </div>
+          </div>
+        `).join('')}
+    </div>
+  `;
+}
+
+async function showLocalCommitDetail(hash) {
+  const result = await V.gitShow(localRepoPath, hash);
+  if (!result.success) return toast('Hata: ' + result.error, 'error');
+  openModal('Commit: ' + hash.substring(0, 7), `
+    <div class="diff-block" style="max-height:60vh;overflow:auto;">
+      ${result.content.split('\n').slice(0, 500).map(line => {
+        let cls = '';
+        if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add';
+        else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-remove';
+        else if (line.startsWith('@@')) cls = 'diff-info';
+        return '<div class="diff-line ' + cls + '">' + escapeHtml(line) + '</div>';
+      }).join('')}
+    </div>
+  `);
+}
+
+async function doCherryPick(hash) {
+  if (!confirm(`Commit ${hash.substring(0, 7)} cherry-pick edilsin mi?`)) return;
+  const result = await V.gitCherryPick(localRepoPath, hash);
+  if (result.success) { toast('Cherry-pick başarılı', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doRevertCommit(hash) {
+  if (!confirm(`Commit ${hash.substring(0, 7)} revert edilsin mi?`)) return;
+  const result = await V.gitRevert(localRepoPath, hash);
+  if (result.success) { toast('Revert başarılı', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- BRANCHES TAB ----------
+
+async function renderLocalBranches() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const branchRes = await V.gitBranchLocal(localRepoPath);
+  if (!branchRes.success) { div.innerHTML = `<p class="text-danger">Hata: ${escapeHtml(branchRes.error)}</p>`; return; }
+
+  const branches = branchRes.branches;
+  const current = branches.current;
+  const allBranches = branches.all || [];
+
+  div.innerHTML = `
+    <div class="flex-row gap-md mb-md flex-wrap">
+      <button class="btn btn-primary" onclick="showCreateLocalBranchModal()">${svgIcon('plus')} Yeni Branch</button>
+      <button class="btn" onclick="showMergeBranchModal()">🔀 Merge</button>
+      <button class="btn" onclick="renderLocalBranches()">${svgIcon('refresh')} Yenile</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">${svgIcon('branch')} Yerel Branch'ler (${allBranches.length})</h3></div>
+      ${allBranches.map(name => `
+        <div class="list-item">
+          <div class="list-item-icon" style="color:${name === current ? 'var(--success)' : 'var(--text-secondary)'};">${svgIcon('branch')}</div>
+          <div class="list-item-content">
+            <div class="list-item-title">${escapeHtml(name)}${name === current ? ' <span class="badge badge-success">aktif</span>' : ''}</div>
+          </div>
+          <div class="list-item-actions">
+            ${name !== current ? `
+              <button class="btn btn-sm btn-success" onclick="doSwitchBranch('${escapeJsStr(name)}')" title="Bu branch'e geç">${svgIcon('check')} Geç</button>
+              <button class="btn btn-sm" onclick="doMergeBranch('${escapeJsStr(name)}')" title="Mevcut branch'e merge et">🔀 Merge</button>
+              <button class="btn btn-sm btn-danger" onclick="doDeleteLocalBranch('${escapeJsStr(name)}')" title="Sil">${svgIcon('trash')}</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function showCreateLocalBranchModal() {
+  openModal('Yeni Yerel Branch', `
+    <div class="input-group"><label>Branch Adı</label><input type="text" id="local-branch-name" placeholder="feature/yeni-ozellik"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doCreateLocalBranch()">Oluştur ve Geç</button>
+  `);
+}
+
+async function doCreateLocalBranch() {
+  const name = document.getElementById('local-branch-name').value.trim();
+  if (!name) return toast('Branch adı gerekli', 'error');
+  const result = await V.gitCreateBranch(localRepoPath, name);
+  if (result.success) { toast(`Branch "${name}" oluşturuldu`, 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doSwitchBranch(branch) {
+  const result = await V.gitCheckout(localRepoPath, branch);
+  if (result.success) { toast(`"${branch}" branch'ine geçildi`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doDeleteLocalBranch(branch) {
+  if (!confirm(`"${branch}" branch'i silinsin mi?`)) return;
+  const result = await V.gitBranchDelete(localRepoPath, branch);
+  if (result.success) { toast(`Branch "${branch}" silindi`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doMergeBranch(branch) {
+  if (!confirm(`"${branch}" branch'i mevcut branch'e merge edilsin mi?`)) return;
+  toast('Merge yapılıyor...', 'info');
+  const result = await V.gitMergeBranch(localRepoPath, branch);
+  if (result.success) { toast('Merge tamamlandı', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+function showMergeBranchModal() {
+  V.gitBranchLocal(localRepoPath).then(res => {
+    if (!res.success) return toast('Hata', 'error');
+    const branches = res.branches.all.filter(b => b !== res.branches.current);
+    openModal('Branch Merge', `
+      <p class="text-muted text-sm mb-md">Mevcut branch: <strong>${escapeHtml(res.branches.current)}</strong></p>
+      <div class="input-group"><label>Merge edilecek branch</label>
+        <select id="merge-branch-select">${branches.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('')}</select>
+      </div>
+      <button class="btn btn-primary btn-block mt-md" onclick="doMergeBranch(document.getElementById('merge-branch-select').value);closeModal();">Merge</button>
+    `);
+  });
+}
+
+// ---------- REMOTES TAB ----------
+
+async function renderLocalRemotes() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const result = await V.gitRemoteList(localRepoPath);
+  const remotes = result.success ? result.remotes : [];
+
+  div.innerHTML = `
+    <div class="flex-row gap-md mb-md">
+      <button class="btn btn-primary" onclick="showAddRemoteModal()">${svgIcon('plus')} Remote Ekle</button>
+      <button class="btn" onclick="renderLocalRemotes()">${svgIcon('refresh')} Yenile</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">${svgIcon('link')} Remote'lar (${remotes.length})</h3></div>
+      ${remotes.length === 0 ? '<p class="text-muted text-sm" style="padding:12px;">Remote tanımlı değil</p>' :
+        remotes.map(r => `
+          <div class="list-item">
+            <div class="list-item-icon">${svgIcon('link')}</div>
+            <div class="list-item-content">
+              <div class="list-item-title">${escapeHtml(r.name)}</div>
+              <div class="list-item-subtitle font-mono">${escapeHtml(r.refs?.fetch || r.refs?.push || '')}</div>
+            </div>
+            <div class="list-item-actions">
+              <button class="btn btn-sm btn-info" onclick="doGitPushToRemote('${escapeJsStr(r.name)}')" title="Push">Push</button>
+              <button class="btn btn-sm" onclick="doGitPullFromRemote('${escapeJsStr(r.name)}')" title="Pull">Pull</button>
+              <button class="btn btn-sm btn-danger" onclick="doRemoveRemote('${escapeJsStr(r.name)}')" title="Kaldır">${svgIcon('trash')}</button>
+            </div>
+          </div>
+        `).join('')}
+    </div>
+  `;
+}
+
+function showAddRemoteModal() {
   openModal('Remote Ekle', `
     <div class="input-group"><label>Remote Adı</label><input type="text" id="remote-name" value="origin" placeholder="origin"></div>
     <div class="input-group"><label>Remote URL</label><input type="url" id="remote-url" placeholder="https://github.com/user/repo.git"></div>
@@ -1629,8 +2190,440 @@ async function doAddRemote() {
   const url = document.getElementById('remote-url').value.trim();
   if (!name || !url) return toast('Tüm alanları doldurun', 'error');
   const result = await V.gitRemoteAdd(localRepoPath, name, url);
-  if (result.success) { toast('Remote eklendi', 'success'); closeModal(); }
+  if (result.success) { toast('Remote eklendi', 'success'); closeModal(); refreshLocalTab(); }
   else toast('Hata: ' + result.error, 'error');
+}
+
+async function doRemoveRemote(name) {
+  if (!confirm(`"${name}" remote'u kaldırılsın mı?`)) return;
+  const result = await V.gitRemoteRemove(localRepoPath, name);
+  if (result.success) { toast('Remote kaldırıldı', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doGitPushToRemote(remote) {
+  toast(`${remote}'a push yapılıyor...`, 'info');
+  const result = await V.gitPush(localRepoPath, remote);
+  if (result.success) toast('Push tamamlandı', 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doGitPullFromRemote(remote) {
+  toast(`${remote}'dan pull yapılıyor...`, 'info');
+  const result = await V.gitPull(localRepoPath, remote);
+  if (result.success) { toast('Pull tamamlandı', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- TAGS TAB ----------
+
+async function renderLocalTags() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const result = await V.gitTagList(localRepoPath);
+  const tags = result.success ? result.tags : { all: [] };
+
+  div.innerHTML = `
+    <div class="flex-row gap-md mb-md">
+      <button class="btn btn-primary" onclick="showCreateLocalTagModal()">${svgIcon('plus')} Yeni Tag</button>
+      <button class="btn btn-info" onclick="doPushTags()">Push Tags</button>
+      <button class="btn" onclick="renderLocalTags()">${svgIcon('refresh')} Yenile</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg> Tag'lar (${tags.all?.length || 0})</h3></div>
+      ${(tags.all || []).length === 0 ? '<p class="text-muted text-sm" style="padding:12px;">Tag bulunamadı</p>' :
+        tags.all.map(t => `
+          <div class="list-item">
+            <div class="list-item-icon"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg></div>
+            <div class="list-item-content"><div class="list-item-title">${escapeHtml(t)}</div></div>
+            <button class="btn btn-sm btn-danger" onclick="doDeleteLocalTag('${escapeJsStr(t)}')" title="Sil">${svgIcon('trash')}</button>
+          </div>
+        `).join('')}
+    </div>
+  `;
+}
+
+function showCreateLocalTagModal() {
+  openModal('Yeni Tag', `
+    <div class="input-group"><label>Tag Adı</label><input type="text" id="local-tag-name" placeholder="v1.0.0"></div>
+    <div class="input-group"><label>Mesaj (opsiyonel, annotated tag için)</label><input type="text" id="local-tag-msg" placeholder="İlk sürüm"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doCreateLocalTag()">Oluştur</button>
+  `);
+}
+
+async function doCreateLocalTag() {
+  const tag = document.getElementById('local-tag-name').value.trim();
+  if (!tag) return toast('Tag adı gerekli', 'error');
+  const msg = document.getElementById('local-tag-msg').value.trim();
+  const result = await V.gitTag(localRepoPath, tag, msg || undefined);
+  if (result.success) { toast(`Tag "${tag}" oluşturuldu`, 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doDeleteLocalTag(tag) {
+  if (!confirm(`"${tag}" tag'ı silinsin mi?`)) return;
+  const result = await V.gitTagDelete(localRepoPath, tag);
+  if (result.success) { toast(`Tag "${tag}" silindi`, 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doPushTags() {
+  toast('Tag\'lar push ediliyor...', 'info');
+  const result = await V.gitPushTags(localRepoPath);
+  if (result.success) toast('Tag\'lar push edildi', 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- STASH TAB ----------
+
+async function renderLocalStash() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const result = await V.gitStashList(localRepoPath);
+  const stashes = result.success ? result.stashes : { all: [] };
+
+  div.innerHTML = `
+    <div class="flex-row gap-md mb-md">
+      <button class="btn btn-primary" onclick="doGitStash()">📦 Stash Yap</button>
+      <button class="btn btn-success" onclick="doGitStashPop()">📤 Stash Pop</button>
+      <button class="btn" onclick="renderLocalStash()">${svgIcon('refresh')} Yenile</button>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">📦 Stash Listesi (${stashes.all?.length || 0})</h3></div>
+      ${(stashes.all || []).length === 0 ? '<p class="text-muted text-sm" style="padding:12px;">Stash bulunamadı</p>' :
+        stashes.all.map((s, i) => `
+          <div class="list-item">
+            <div class="list-item-icon">📦</div>
+            <div class="list-item-content">
+              <div class="list-item-title">${escapeHtml(s.message || `stash@{${i}}`)}</div>
+              <div class="list-item-subtitle">${escapeHtml(s.hash?.substring(0, 7) || '')} · ${timeAgo(s.date)}</div>
+            </div>
+            <div class="list-item-actions">
+              <button class="btn btn-sm" onclick="showStashDetail(${i})" title="Detay">🔍</button>
+              <button class="btn btn-sm btn-danger" onclick="doStashDrop(${i})" title="Sil">${svgIcon('trash')}</button>
+            </div>
+          </div>
+        `).join('')}
+    </div>
+  `;
+}
+
+async function showStashDetail(index) {
+  const result = await V.gitShow(localRepoPath, `stash@{${index}}`);
+  if (!result.success) return toast('Hata: ' + result.error, 'error');
+  openModal(`Stash @{${index}} Detayı`, `
+    <div class="diff-block" style="max-height:60vh;overflow:auto;">
+      ${result.content.split('\n').slice(0, 300).map(line => {
+        let cls = '';
+        if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add';
+        else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-remove';
+        else if (line.startsWith('@@')) cls = 'diff-info';
+        return '<div class="diff-line ' + cls + '">' + escapeHtml(line) + '</div>';
+      }).join('')}
+    </div>
+  `);
+}
+
+async function doStashDrop(index) {
+  if (!confirm(`stash@{${index}} silinsin mi?`)) return;
+  const result = await V.gitStashDrop(localRepoPath, index);
+  if (result.success) { toast('Stash silindi', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- CONFIG TAB ----------
+
+async function renderLocalConfig() {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+
+  const [nameRes, emailRes] = await Promise.all([
+    V.gitConfigGet(localRepoPath, 'user.name'),
+    V.gitConfigGet(localRepoPath, 'user.email')
+  ]);
+
+  div.innerHTML = `
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">⚙️ Git Yapılandırması</h3></div>
+      <div class="input-group">
+        <label>user.name</label>
+        <div class="flex-row">
+          <input type="text" id="config-username" value="${escapeHtml(nameRes.success ? nameRes.value || '' : '')}" placeholder="Adınız">
+          <button class="btn" onclick="saveConfigValue('user.name', document.getElementById('config-username').value)">Kaydet</button>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>user.email</label>
+        <div class="flex-row">
+          <input type="text" id="config-email" value="${escapeHtml(emailRes.success ? emailRes.value || '' : '')}" placeholder="email@example.com">
+          <button class="btn" onclick="saveConfigValue('user.email', document.getElementById('config-email').value)">Kaydet</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">📂 Repo Bilgileri</h3></div>
+      <div class="flex-row gap-lg flex-wrap text-sm" style="padding:8px 0;">
+        <span><b>Yol:</b> ${escapeHtml(localRepoPath)}</span>
+      </div>
+    </div>
+  `;
+}
+
+async function saveConfigValue(key, value) {
+  if (!value.trim()) return toast('Değer boş olamaz', 'error');
+  const result = await V.gitConfigSet(localRepoPath, key, value.trim());
+  if (result.success) toast(`${key} güncellendi`, 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- EDITOR TAB ----------
+
+async function renderLocalEditor() {
+  const div = document.getElementById('local-tab-content');
+
+  div.innerHTML = `
+    <div class="editor-layout">
+      <div class="editor-sidebar">
+        <div class="editor-sidebar-header">
+          <span class="font-bold text-sm">DOSYALAR</span>
+          <button class="btn-icon" onclick="showNewFileModal()" title="Yeni Dosya">${svgIcon('plus')}</button>
+        </div>
+        <div class="editor-file-tree" id="editor-file-tree">${loading()}</div>
+      </div>
+      <div class="editor-main">
+        <div class="editor-toolbar" id="editor-toolbar">
+          <span class="text-muted text-sm" id="editor-filename">Bir dosya seçin</span>
+          <div class="flex-row gap-sm">
+            <button class="btn btn-sm btn-success" id="editor-save-btn" onclick="saveEditorFile()" disabled>${svgIcon('check')} Kaydet</button>
+            <button class="btn btn-sm" id="editor-stage-btn" onclick="stageEditorFile()" disabled>${svgIcon('plus')} Stage</button>
+            <button class="btn btn-sm btn-danger" id="editor-delete-btn" onclick="deleteEditorFile()" disabled>${svgIcon('trash')} Sil</button>
+          </div>
+        </div>
+        <div class="editor-content" id="editor-content">
+          <div class="editor-placeholder">
+            <svg viewBox="0 0 24 24" width="48" height="48" style="opacity:0.3;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+            <p class="text-muted mt-sm">Sol panelden bir dosya seçerek düzenlemeye başlayın</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  loadEditorFileTree(localRepoPath);
+}
+
+async function loadEditorFileTree(dirPath) {
+  const tree = document.getElementById('editor-file-tree');
+  const result = await V.localListDir(dirPath);
+  if (!result.success) { tree.innerHTML = '<p class="text-muted text-sm" style="padding:8px;">Dosyalar yüklenemedi</p>'; return; }
+
+  const isRoot = dirPath === localRepoPath;
+  tree.innerHTML = `
+    ${!isRoot ? `<div class="editor-tree-item" onclick="loadEditorFileTree('${escapeJsStr(dirPath.substring(0, dirPath.lastIndexOf(dirPath.includes('/') ? '/' : '\\\\')))}')"><span style="color:var(--accent);">📁</span> <span class="text-accent">..</span></div>` : ''}
+    ${result.items.map(item => {
+      if (item.isDir) {
+        return `<div class="editor-tree-item" onclick="loadEditorFileTree('${escapeJsStr(item.path)}')"><span style="color:var(--accent);">📁</span> <span class="text-accent">${escapeHtml(item.name)}</span></div>`;
+      } else {
+        return `<div class="editor-tree-item" onclick="openFileInEditor('${escapeJsStr(item.path)}')">${getFileIcon(item.name)} <span>${escapeHtml(item.name)}</span></div>`;
+      }
+    }).join('')}
+  `;
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const icons = {
+    js: '🟨', ts: '🔷', json: '📋', html: '🌐', css: '🎨', md: '📝',
+    py: '🐍', java: '☕', rb: '💎', go: '🔵', rs: '🦀', c: '⚙️',
+    cpp: '⚙️', h: '⚙️', sh: '🐚', yml: '📄', yaml: '📄', xml: '📄',
+    txt: '📄', gitignore: '🙈', env: '🔒', lock: '🔒',
+    png: '🖼️', jpg: '🖼️', svg: '🖼️', gif: '🖼️',
+  };
+  return icons[ext] || '📄';
+}
+
+async function openFileInEditor(filePath) {
+  const contentDiv = document.getElementById('editor-content');
+  contentDiv.innerHTML = loading();
+
+  const result = await V.localReadFile(filePath);
+  if (!result.success) {
+    contentDiv.innerHTML = `<div class="editor-placeholder"><p class="text-danger">Dosya okunamadı: ${escapeHtml(result.error)}</p></div>`;
+    return;
+  }
+
+  editorCurrentFile = filePath;
+  const fileName = filePath.split(/[\\/]/).pop();
+  document.getElementById('editor-filename').textContent = fileName;
+  document.getElementById('editor-save-btn').disabled = false;
+  document.getElementById('editor-stage-btn').disabled = false;
+  document.getElementById('editor-delete-btn').disabled = false;
+
+  const lines = result.content.split('\n');
+  const lineNums = lines.map((_, i) => i + 1).join('\n');
+
+  contentDiv.innerHTML = `
+    <div class="editor-wrapper">
+      <div class="editor-line-numbers" id="editor-line-nums">${lineNums}</div>
+      <textarea class="editor-textarea" id="editor-textarea" spellcheck="false" wrap="off">${escapeHtml(result.content)}</textarea>
+    </div>
+  `;
+
+  const textarea = document.getElementById('editor-textarea');
+  const lineNumsEl = document.getElementById('editor-line-nums');
+
+  textarea.addEventListener('scroll', () => {
+    lineNumsEl.scrollTop = textarea.scrollTop;
+  });
+
+  textarea.addEventListener('input', () => {
+    const newLines = textarea.value.split('\n');
+    lineNumsEl.textContent = newLines.map((_, i) => i + 1).join('\n');
+  });
+
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + 2;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      saveEditorFile();
+    }
+  });
+}
+
+function openFileInEditorFromChanges(file) {
+  const fullPath = localRepoPath + (localRepoPath.includes('/') ? '/' : '\\') + file;
+  localRepoTab = 'editor';
+  renderLocalRepo();
+  setTimeout(() => openFileInEditor(fullPath), 300);
+}
+
+async function saveEditorFile() {
+  if (!editorCurrentFile) return;
+  const content = document.getElementById('editor-textarea').value;
+  const result = await V.localWriteFile(editorCurrentFile, content);
+  if (result.success) toast('Dosya kaydedildi', 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function stageEditorFile() {
+  if (!editorCurrentFile) return;
+  const relativePath = editorCurrentFile.replace(localRepoPath + '\\', '').replace(localRepoPath + '/', '');
+  const result = await V.gitAddFile(localRepoPath, relativePath);
+  if (result.success) toast('Dosya staged', 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function deleteEditorFile() {
+  if (!editorCurrentFile) return;
+  if (!confirm('Bu dosya silinecek. Devam edilsin mi?')) return;
+  const result = await V.localDeleteFile(editorCurrentFile);
+  if (result.success) {
+    toast('Dosya silindi', 'success');
+    editorCurrentFile = null;
+    document.getElementById('editor-content').innerHTML = '<div class="editor-placeholder"><p class="text-muted">Dosya silindi</p></div>';
+    document.getElementById('editor-save-btn').disabled = true;
+    document.getElementById('editor-stage-btn').disabled = true;
+    document.getElementById('editor-delete-btn').disabled = true;
+    document.getElementById('editor-filename').textContent = 'Bir dosya seçin';
+    loadEditorFileTree(localRepoPath);
+  } else toast('Hata: ' + result.error, 'error');
+}
+
+function showNewFileModal() {
+  openModal('Yeni Dosya Oluştur', `
+    <div class="input-group"><label>Dosya Adı (yol dahil)</label><input type="text" id="new-file-name" placeholder="src/index.js"></div>
+    <div class="input-group"><label>İçerik (opsiyonel)</label><textarea id="new-file-content" style="font-family:var(--font-mono);min-height:120px;" placeholder="// Yeni dosya"></textarea></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="createNewLocalFile()">Oluştur</button>
+  `);
+}
+
+async function createNewLocalFile() {
+  const name = document.getElementById('new-file-name').value.trim();
+  if (!name) return toast('Dosya adı gerekli', 'error');
+  const sep = localRepoPath.includes('/') ? '/' : '\\';
+  const fullPath = localRepoPath + sep + name.replace(/\//g, sep);
+  const content = document.getElementById('new-file-content').value;
+  const result = await V.localCreateFile(fullPath, content);
+  if (result.success) {
+    toast('Dosya oluşturuldu', 'success');
+    closeModal();
+    loadEditorFileTree(localRepoPath);
+    openFileInEditor(fullPath);
+  } else toast('Hata: ' + result.error, 'error');
+}
+
+// ---------- FILES TAB ----------
+
+let localFileBrowserPath = '';
+
+async function renderLocalFiles() {
+  localFileBrowserPath = localRepoPath;
+  await loadLocalFileBrowser(localRepoPath);
+}
+
+async function loadLocalFileBrowser(dirPath) {
+  const div = document.getElementById('local-tab-content');
+  div.innerHTML = loading();
+  localFileBrowserPath = dirPath;
+
+  const result = await V.localListDir(dirPath);
+  if (!result.success) { div.innerHTML = `<p class="text-danger">Hata: ${escapeHtml(result.error)}</p>`; return; }
+
+  const relativePath = dirPath.replace(localRepoPath, '') || '/';
+  const isRoot = dirPath === localRepoPath;
+
+  div.innerHTML = `
+    <div class="breadcrumb mb-md">
+      <span class="breadcrumb-item" onclick="loadLocalFileBrowser('${escapeJsStr(localRepoPath)}')" style="cursor:pointer;">📂 Root</span>
+      ${!isRoot ? `<span class="breadcrumb-sep">/</span><span class="breadcrumb-current">${escapeHtml(relativePath)}</span>` : ''}
+    </div>
+    <div class="card" style="padding:0;">
+      ${!isRoot ? `
+        <div class="file-item" onclick="loadLocalFileBrowser('${escapeJsStr(dirPath.substring(0, Math.max(dirPath.lastIndexOf('/'), dirPath.lastIndexOf('\\\\'))))}')">
+          <span class="file-icon folder">${svgIcon('folder')}</span>
+          <span class="file-name">..</span>
+        </div>
+      ` : ''}
+      ${result.items.map(item => `
+        <div class="file-item" onclick="${item.isDir ? `loadLocalFileBrowser('${escapeJsStr(item.path)}')` : `previewLocalFile('${escapeJsStr(item.path)}')`}">
+          <span class="file-icon ${item.isDir ? 'folder' : 'file'}">${item.isDir ? svgIcon('folder') : getFileIcon(item.name)}</span>
+          <span class="file-name">${escapeHtml(item.name)}</span>
+          <div class="list-item-actions" style="margin-left:auto;">
+            ${!item.isDir ? `<button class="btn btn-sm" onclick="event.stopPropagation();openFileInEditorFromFiles('${escapeJsStr(item.path)}')" title="Editörde Aç">✏️</button>` : ''}
+          </div>
+        </div>
+      `).join('')}
+      ${result.items.length === 0 ? '<p class="text-muted text-sm" style="padding:16px;">Boş klasör</p>' : ''}
+    </div>
+  `;
+}
+
+async function previewLocalFile(filePath) {
+  const result = await V.localReadFile(filePath);
+  if (!result.success) return toast('Dosya okunamadı', 'error');
+  const fileName = filePath.split(/[\\/]/).pop();
+  openModal('📄 ' + fileName, `
+    <div class="diff-block" style="max-height:60vh;overflow:auto;">
+      <pre style="padding:16px;overflow-x:auto;font-family:var(--font-mono);font-size:13px;line-height:1.6;margin:0;">${escapeHtml(result.content)}</pre>
+    </div>
+    <div class="flex-row gap-sm mt-md">
+      <button class="btn btn-primary" onclick="closeModal();openFileInEditorFromFiles('${escapeJsStr(filePath)}')">✏️ Editörde Aç</button>
+    </div>
+  `);
+}
+
+function openFileInEditorFromFiles(filePath) {
+  localRepoTab = 'editor';
+  renderLocalRepo();
+  setTimeout(() => openFileInEditor(filePath), 300);
 }
 
 // ==========================================
@@ -3158,72 +4151,6 @@ async function showActivityFeed() {
       </div>
     </div>
   `;
-}
-
-// ==========================================
-// NEW FEATURES: LOCAL GIT ENHANCEMENTS
-// ==========================================
-
-function showLocalBranchModal() {
-  openModal('Yeni Yerel Branch', `
-    <div class="input-group"><label>Branch Adı</label><input type="text" id="local-branch-name" placeholder="feature/yeni-ozellik"></div>
-    <button class="btn btn-primary btn-block mt-md" onclick="doCreateLocalBranch()">Oluştur ve Geç</button>
-  `);
-}
-
-async function doCreateLocalBranch() {
-  const name = document.getElementById('local-branch-name').value.trim();
-  if (!name) return toast('Branch adı gerekli', 'error');
-  const result = await V.gitCreateBranch(localRepoPath, name);
-  if (result.success) { toast(`Branch "${name}" oluşturuldu ve geçildi`, 'success'); closeModal(); loadLocalRepoInfo(); }
-  else toast('Hata: ' + result.error, 'error');
-}
-
-function showLocalTagModal() {
-  openModal('Yeni Tag', `
-    <div class="input-group"><label>Tag Adı</label><input type="text" id="local-tag-name" placeholder="v1.0.0"></div>
-    <div class="input-group"><label>Mesaj (opsiyonel)</label><input type="text" id="local-tag-msg" placeholder="İlk sürüm"></div>
-    <button class="btn btn-primary btn-block mt-md" onclick="doCreateLocalTag()">Oluştur</button>
-  `);
-}
-
-async function doCreateLocalTag() {
-  const tag = document.getElementById('local-tag-name').value.trim();
-  if (!tag) return toast('Tag adı gerekli', 'error');
-  const msg = document.getElementById('local-tag-msg').value.trim();
-  const result = await V.gitTag(localRepoPath, tag, msg || undefined);
-  if (result.success) { toast(`Tag "${tag}" oluşturuldu`, 'success'); closeModal(); loadLocalRepoInfo(); }
-  else toast('Hata: ' + result.error, 'error');
-}
-
-async function doGitReset(mode) {
-  if (!confirm(`Git reset --${mode} yapılacak. Devam edilsin mi?`)) return;
-  const result = await V.gitReset(localRepoPath, mode);
-  if (result.success) { toast(`Git reset --${mode} yapıldı`, 'success'); loadLocalRepoInfo(); }
-  else toast('Hata: ' + result.error, 'error');
-}
-
-async function showGitDiff() {
-  const result = await V.gitDiff(localRepoPath);
-  if (!result.success) return toast('Hata: ' + result.error, 'error');
-  
-  openModal('Git Diff', `
-    <div class="diff-block">
-      ${result.diff ? result.diff.split('\n').slice(0, 200).map(line => {
-        let cls = '';
-        if (line.startsWith('+')) cls = 'diff-add';
-        else if (line.startsWith('-')) cls = 'diff-remove';
-        else if (line.startsWith('@@')) cls = 'diff-info';
-        return '<div class="diff-line ' + cls + '">' + escapeHtml(line) + '</div>';
-      }).join('') : '<p class="text-muted">Değişiklik yok</p>'}
-    </div>
-  `);
-}
-
-async function doGitCheckout(branch) {
-  const result = await V.gitCheckout(localRepoPath, branch);
-  if (result.success) { toast(`"${branch}" branch'ine geçildi`, 'success'); loadLocalRepoInfo(); }
-  else toast('Hata: ' + result.error, 'error');
 }
 
 // ==========================================

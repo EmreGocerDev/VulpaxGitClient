@@ -83,7 +83,7 @@ contextBridge.exposeInMainWorld('vulpax', {
   searchRepos: (q) => ipcRenderer.invoke('github-search-repos', q),
   searchUsers: (q) => ipcRenderer.invoke('github-search-users', q),
 
-  // Local Git
+  // Local Git - Basic
   gitClone: (url, path) => ipcRenderer.invoke('git-clone', url, path),
   gitStatus: (path) => ipcRenderer.invoke('git-status', path),
   gitLog: (path, max) => ipcRenderer.invoke('git-log', path, max),
@@ -99,6 +99,37 @@ contextBridge.exposeInMainWorld('vulpax', {
   gitRemoteAdd: (path, name, url) => ipcRenderer.invoke('git-remote-add', path, name, url),
   gitStash: (path) => ipcRenderer.invoke('git-stash', path),
   gitStashPop: (path) => ipcRenderer.invoke('git-stash-pop', path),
+
+  // Local Git - Enhanced
+  gitRemoteList: (path) => ipcRenderer.invoke('git-remote-list', path),
+  gitRemoteRemove: (path, name) => ipcRenderer.invoke('git-remote-remove', path, name),
+  gitStashList: (path) => ipcRenderer.invoke('git-stash-list', path),
+  gitStashDrop: (path, index) => ipcRenderer.invoke('git-stash-drop', path, index),
+  gitDiffStaged: (path) => ipcRenderer.invoke('git-diff-staged', path),
+  gitDiffFile: (path, file) => ipcRenderer.invoke('git-diff-file', path, file),
+  gitLogFile: (path, file) => ipcRenderer.invoke('git-log-file', path, file),
+  gitShow: (path, ref) => ipcRenderer.invoke('git-show', path, ref),
+  gitMergeBranch: (path, branch) => ipcRenderer.invoke('git-merge-branch', path, branch),
+  gitCherryPick: (path, hash) => ipcRenderer.invoke('git-cherry-pick', path, hash),
+  gitRevert: (path, hash) => ipcRenderer.invoke('git-revert', path, hash),
+  gitClean: (path) => ipcRenderer.invoke('git-clean', path),
+  gitConfigGet: (path, key) => ipcRenderer.invoke('git-config-get', path, key),
+  gitConfigSet: (path, key, value) => ipcRenderer.invoke('git-config-set', path, key, value),
+  gitUnstage: (path, files) => ipcRenderer.invoke('git-unstage', path, files),
+  gitTagList: (path) => ipcRenderer.invoke('git-tag-list', path),
+  gitTagDelete: (path, tag) => ipcRenderer.invoke('git-tag-delete', path, tag),
+  gitPushTags: (path) => ipcRenderer.invoke('git-push-tags', path),
+  gitAddFile: (path, file) => ipcRenderer.invoke('git-add-file', path, file),
+  gitBranchDelete: (path, branch) => ipcRenderer.invoke('git-branch-delete', path, branch),
+  gitCommitAmend: (path, msg) => ipcRenderer.invoke('git-commit-amend', path, msg),
+
+  // Local File Operations (Code Editor)
+  localReadFile: (path) => ipcRenderer.invoke('local-read-file', path),
+  localWriteFile: (path, content) => ipcRenderer.invoke('local-write-file', path, content),
+  localListDir: (path) => ipcRenderer.invoke('local-list-dir', path),
+  localCreateFile: (path, content) => ipcRenderer.invoke('local-create-file', path, content),
+  localDeleteFile: (path) => ipcRenderer.invoke('local-delete-file', path),
+  localFileStat: (path) => ipcRenderer.invoke('local-file-stat', path),
 
   // Dialog
   selectDirectory: () => ipcRenderer.invoke('select-directory'),

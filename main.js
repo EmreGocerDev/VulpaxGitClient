@@ -1161,3 +1161,297 @@ ipcMain.handle('github-list-forks', async (event, owner, repo) => {
     return { success: false, error: err.message };
   }
 });
+
+// ========== ENHANCED LOCAL GIT OPERATIONS ==========
+
+ipcMain.handle('git-remote-list', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const remotes = await git.getRemotes(true);
+    return { success: true, remotes };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-remote-remove', async (event, repoPath, name) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.removeRemote(name);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-stash-list', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const result = await git.stashList();
+    return { success: true, stashes: result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-stash-drop', async (event, repoPath, index) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.stash(['drop', `stash@{${index}}`]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-diff-staged', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const diff = await git.diff(['--cached']);
+    return { success: true, diff };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-diff-file', async (event, repoPath, filePath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const diff = await git.diff([filePath]);
+    return { success: true, diff };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-log-file', async (event, repoPath, filePath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const log = await git.log({ file: filePath, maxCount: 30 });
+    return { success: true, log };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-show', async (event, repoPath, ref) => {
+  try {
+    const git = simpleGit(repoPath);
+    const result = await git.show([ref]);
+    return { success: true, content: result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-merge-branch', async (event, repoPath, branch) => {
+  try {
+    const git = simpleGit(repoPath);
+    const result = await git.merge([branch]);
+    return { success: true, result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-cherry-pick', async (event, repoPath, hash) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.raw(['cherry-pick', hash]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-revert', async (event, repoPath, hash) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.revert(hash);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-clean', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.clean('f', ['-d']);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-config-get', async (event, repoPath, key) => {
+  try {
+    const git = simpleGit(repoPath);
+    const value = await git.getConfig(key);
+    return { success: true, value: value.value };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-config-set', async (event, repoPath, key, value) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.addConfig(key, value);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-unstage', async (event, repoPath, files) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.reset(['HEAD', '--', ...files]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-tag-list', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const tags = await git.tags();
+    return { success: true, tags };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-tag-delete', async (event, repoPath, tagName) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.raw(['tag', '-d', tagName]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-push-tags', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.pushTags();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-add-file', async (event, repoPath, file) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.add(file);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-branch-delete', async (event, repoPath, branch) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.deleteLocalBranch(branch, true);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('git-commit-amend', async (event, repoPath, message) => {
+  try {
+    const git = simpleGit(repoPath);
+    if (message) {
+      await git.commit(message, { '--amend': null });
+    } else {
+      await git.commit('', { '--amend': null, '--no-edit': null });
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ========== LOCAL FILE OPERATIONS (Code Editor) ==========
+
+ipcMain.handle('local-read-file', async (event, filePath) => {
+  try {
+    const resolved = path.resolve(filePath);
+    const content = fs.readFileSync(resolved, 'utf-8');
+    return { success: true, content };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('local-write-file', async (event, filePath, content) => {
+  try {
+    const resolved = path.resolve(filePath);
+    fs.writeFileSync(resolved, content, 'utf-8');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('local-list-dir', async (event, dirPath) => {
+  try {
+    const resolved = path.resolve(dirPath);
+    const items = fs.readdirSync(resolved, { withFileTypes: true });
+    const result = items
+      .filter(item => item.name !== '.git')
+      .map(item => ({
+        name: item.name,
+        isDir: item.isDirectory(),
+        path: path.join(resolved, item.name)
+      }))
+      .sort((a, b) => {
+        if (a.isDir && !b.isDir) return -1;
+        if (!a.isDir && b.isDir) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    return { success: true, items: result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('local-create-file', async (event, filePath, content) => {
+  try {
+    const resolved = path.resolve(filePath);
+    const dir = path.dirname(resolved);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(resolved, content || '', 'utf-8');
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('local-delete-file', async (event, filePath) => {
+  try {
+    const resolved = path.resolve(filePath);
+    fs.unlinkSync(resolved);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('local-file-stat', async (event, filePath) => {
+  try {
+    const resolved = path.resolve(filePath);
+    const stat = fs.statSync(resolved);
+    return { success: true, stat: { size: stat.size, isFile: stat.isFile(), isDir: stat.isDirectory(), mtime: stat.mtime } };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
