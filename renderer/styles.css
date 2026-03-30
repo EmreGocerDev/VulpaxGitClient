@@ -1900,3 +1900,103 @@ select { cursor: pointer; }
 .nav-item {
   position: relative;
 }
+
+/* ==========================================
+   TERMINAL
+   ========================================== */
+
+.terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 300px);
+  min-height: 350px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-muted);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.terminal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.terminal-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #c9d1d9;
+  background: #0d1117;
+}
+
+.terminal-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-line.terminal-cmd {
+  color: #58a6ff;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.terminal-line.terminal-cmd .terminal-prompt {
+  color: #3fb950;
+  margin-right: 8px;
+}
+
+.terminal-line.terminal-error {
+  color: #f85149;
+}
+
+.terminal-line.terminal-info {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.terminal-input-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #161b22;
+  border-top: 1px solid #30363d;
+  gap: 8px;
+}
+
+.terminal-input-row .terminal-prompt {
+  color: #3fb950;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #c9d1d9;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  outline: none;
+  caret-color: #58a6ff;
+}
+
+.terminal-input::placeholder {
+  color: #484f58;
+}

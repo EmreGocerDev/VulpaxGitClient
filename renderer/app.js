@@ -1415,6 +1415,7 @@ async function renderLocalRepo() {
           <button class="local-tab ${localRepoTab === 'config' ? 'active' : ''}" onclick="switchLocalTab('config')">⚙️ Config</button>
           <button class="local-tab ${localRepoTab === 'editor' ? 'active' : ''}" onclick="switchLocalTab('editor')">✏️ Editör</button>
           <button class="local-tab ${localRepoTab === 'files' ? 'active' : ''}" onclick="switchLocalTab('files')">📁 Dosyalar</button>
+          <button class="local-tab ${localRepoTab === 'terminal' ? 'active' : ''}" onclick="switchLocalTab('terminal')">💻 Terminal</button>
         </div>
         <div id="local-tab-content">${loading()}</div>
       ` : `
@@ -1455,7 +1456,7 @@ function switchLocalTab(tab) {
   localRepoTab = tab;
   localTabRenderId++;
   document.querySelectorAll('.local-tab').forEach(b => b.classList.remove('active'));
-  const tabIndex = ['overview','changes','history','branches','remotes','tags','stash','config','editor','files'].indexOf(tab);
+  const tabIndex = ['overview','changes','history','branches','remotes','tags','stash','config','editor','files','terminal'].indexOf(tab);
   const allTabs = document.querySelectorAll('#local-tabs .local-tab');
   if (allTabs[tabIndex]) allTabs[tabIndex].classList.add('active');
   const tabContent = document.getElementById('local-tab-content');
@@ -1476,6 +1477,7 @@ async function renderLocalTabContent() {
     config: renderLocalConfig,
     editor: renderLocalEditor,
     files: renderLocalFiles,
+    terminal: renderLocalTerminal,
   };
   const fn = tabs[localRepoTab];
   if (!fn) return;
@@ -5125,6 +5127,155 @@ function renderDashboardStats(repos, notifs, gists) {
 // ==========================================
 // INIT ENHANCEMENTS
 // ==========================================
+
+// ==========================================
+// LOCAL TERMINAL
+// ==========================================
+
+let terminalHistory = [];
+let terminalHistoryIndex = -1;
+
+function renderLocalTerminal() {
+  const div = document.getElementById('local-tab-content');
+  if (!div) return;
+  div.innerHTML = `
+    <div class="terminal-container">
+      <div class="terminal-toolbar">
+        <span class="terminal-title">💻 Terminal — ${escapeHtml(localRepoPath)}</span>
+        <div class="flex-row gap-sm">
+          <button class="btn btn-sm btn-success" onclick="terminalQuickCmd('git add . && git status')">${svgIcon('plus')} Stage All</button>
+          <button class="btn btn-sm btn-primary" onclick="showTerminalCommitModal()">${svgIcon('commit')} Commit</button>
+          <button class="btn btn-sm btn-info" onclick="terminalQuickCmd('git push')">${svgIcon('link')} Push</button>
+          <button class="btn btn-sm" onclick="terminalQuickCmd('git pull')">${svgIcon('download')} Pull</button>
+          <button class="btn btn-sm" onclick="terminalQuickCmd('git status')">📋 Status</button>
+          <button class="btn btn-sm" onclick="terminalQuickCmd('git log --oneline -10')">📜 Log</button>
+          <button class="btn btn-sm" onclick="terminalQuickCmd('git diff --stat')">📊 Diff Stat</button>
+          <button class="btn btn-sm btn-danger" onclick="clearTerminal()">🗑️ Temizle</button>
+        </div>
+      </div>
+      <div class="terminal-output" id="terminal-output"><div class="terminal-line terminal-info">Terminal hazır. Komut yazın veya yukarıdaki butonları kullanın.</div><div class="terminal-line terminal-info">Çalışma dizini: ${escapeHtml(localRepoPath)}</div></div>
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">$</span>
+        <input type="text" class="terminal-input" id="terminal-input" placeholder="Komut yazın... (Enter ile çalıştır)" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+  `;
+  const input = document.getElementById('terminal-input');
+  input.focus();
+  input.addEventListener('keydown', handleTerminalKeydown);
+}
+
+function handleTerminalKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const cmd = e.target.value.trim();
+    if (!cmd) return;
+    terminalHistory.push(cmd);
+    terminalHistoryIndex = terminalHistory.length;
+    e.target.value = '';
+    runTerminalCommand(cmd);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (terminalHistoryIndex > 0) {
+      terminalHistoryIndex--;
+      e.target.value = terminalHistory[terminalHistoryIndex] || '';
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (terminalHistoryIndex < terminalHistory.length - 1) {
+      terminalHistoryIndex++;
+      e.target.value = terminalHistory[terminalHistoryIndex] || '';
+    } else {
+      terminalHistoryIndex = terminalHistory.length;
+      e.target.value = '';
+    }
+  }
+}
+
+async function runTerminalCommand(cmd) {
+  const output = document.getElementById('terminal-output');
+  if (!output) return;
+  
+  // Show command
+  output.innerHTML += `<div class="terminal-line terminal-cmd"><span class="terminal-prompt">$</span> ${escapeHtml(cmd)}</div>`;
+  output.scrollTop = output.scrollHeight;
+  
+  const result = await V.runCommand(localRepoPath, cmd);
+  
+  if (result.stdout) {
+    const lines = result.stdout.split('\n');
+    lines.forEach(line => {
+      if (line.trim()) output.innerHTML += `<div class="terminal-line">${escapeHtml(line)}</div>`;
+    });
+  }
+  if (result.stderr) {
+    const lines = result.stderr.split('\n');
+    lines.forEach(line => {
+      if (line.trim()) output.innerHTML += `<div class="terminal-line terminal-error">${escapeHtml(line)}</div>`;
+    });
+  }
+  if (!result.success && result.error && !result.stderr) {
+    output.innerHTML += `<div class="terminal-line terminal-error">Hata: ${escapeHtml(result.error)}</div>`;
+  }
+  if (result.success && !result.stdout && !result.stderr) {
+    output.innerHTML += `<div class="terminal-line terminal-info">Komut başarıyla çalıştı (çıktı yok)</div>`;
+  }
+  
+  output.scrollTop = output.scrollHeight;
+  updateStatusBarBranch();
+}
+
+function terminalQuickCmd(cmd) {
+  const output = document.getElementById('terminal-output');
+  if (!output) {
+    // Terminal tab not active, switch to it first
+    switchLocalTab('terminal');
+    setTimeout(() => terminalQuickCmd(cmd), 200);
+    return;
+  }
+  runTerminalCommand(cmd);
+}
+
+function showTerminalCommitModal() {
+  openModal('Terminal Commit', `
+    <div class="input-group">
+      <label>Şablon</label>
+      <select onchange="document.getElementById('terminal-commit-msg').value=this.value;document.getElementById('terminal-commit-msg').focus();">
+        <option value="">Şablon seç...</option>
+        <option value="feat: ">feat: Yeni özellik</option>
+        <option value="fix: ">fix: Hata düzeltme</option>
+        <option value="docs: ">docs: Dokümantasyon</option>
+        <option value="refactor: ">refactor: Yeniden yapılandırma</option>
+        <option value="chore: ">chore: Diğer</option>
+      </select>
+    </div>
+    <div class="input-group"><label>Commit Mesajı</label><textarea id="terminal-commit-msg" placeholder="feat: açıklama" style="min-height:80px;"></textarea></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doTerminalCommit()">Commit</button>
+    <button class="btn btn-warning btn-block mt-sm" onclick="doTerminalCommitPush()">Commit + Push</button>
+  `);
+}
+
+async function doTerminalCommit() {
+  const msg = document.getElementById('terminal-commit-msg')?.value?.trim();
+  if (!msg) return toast('Commit mesajı gerekli', 'error');
+  closeModal();
+  await runTerminalCommand('git add .');
+  await runTerminalCommand('git commit -m "' + msg.replace(/"/g, '\\"') + '"');
+}
+
+async function doTerminalCommitPush() {
+  const msg = document.getElementById('terminal-commit-msg')?.value?.trim();
+  if (!msg) return toast('Commit mesajı gerekli', 'error');
+  closeModal();
+  await runTerminalCommand('git add .');
+  await runTerminalCommand('git commit -m "' + msg.replace(/"/g, '\\"') + '"');
+  await runTerminalCommand('git push');
+}
+
+function clearTerminal() {
+  const output = document.getElementById('terminal-output');
+  if (output) output.innerHTML = '<div class="terminal-line terminal-info">Terminal temizlendi.</div>';
+}
 
 function initEnhancements() {
   initSidebarToggle();

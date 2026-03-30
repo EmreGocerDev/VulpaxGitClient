@@ -258,6 +258,9 @@ contextBridge.exposeInMainWorld('vulpax', {
   // NEW: Git Fetch All
   gitFetchAll: (repoPath) => ipcRenderer.invoke('git-fetch-all', repoPath),
 
-  // NEW: Git Remote Add
-  gitRemoteAdd: (repoPath, name, url) => ipcRenderer.invoke('git-remote-add', repoPath, name, url),
+  // NEW: Git Remote Add (uses existing handler)
+  // gitRemoteAdd already exists via git-remote-add at line 701
+
+  // NEW: Run Terminal Command
+  runCommand: (cwd, command) => ipcRenderer.invoke('run-terminal-command', cwd, command),
 });

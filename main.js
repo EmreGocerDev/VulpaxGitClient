@@ -1656,15 +1656,21 @@ ipcMain.handle('git-fetch-all', async (event, repoPath) => {
 });
 
 // ==========================================
-// NEW: GIT REMOTE ADD
+// NEW: RUN TERMINAL COMMAND
 // ==========================================
 
-ipcMain.handle('git-remote-add', async (event, repoPath, name, url) => {
-  try {
-    const git = simpleGit(repoPath);
-    await git.addRemote(name, url);
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+ipcMain.handle('run-terminal-command', async (event, cwd, command) => {
+  const { exec } = require('child_process');
+  return new Promise((resolve) => {
+    const sanitizedCwd = path.resolve(cwd);
+    exec(command, { cwd: sanitizedCwd, timeout: 30000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+      resolve({
+        success: !error,
+        stdout: stdout || '',
+        stderr: stderr || '',
+        error: error ? error.message : null,
+        code: error ? error.code : 0
+      });
+    });
+  });
 });
