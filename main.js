@@ -1455,3 +1455,216 @@ ipcMain.handle('local-file-stat', async (event, filePath) => {
     return { success: false, error: err.message };
   }
 });
+
+// ==========================================
+// NEW: GIT BLAME
+// ==========================================
+
+ipcMain.handle('git-blame', async (event, repoPath, filePath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const result = await git.raw(['blame', '--porcelain', filePath]);
+    const lines = result.split('\n');
+    const blameData = [];
+    let current = {};
+    for (const line of lines) {
+      if (/^[0-9a-f]{40}\s/.test(line)) {
+        if (current.hash) blameData.push(current);
+        const parts = line.split(' ');
+        current = { hash: parts[0], origLine: parts[1], finalLine: parts[2] };
+      } else if (line.startsWith('author ')) {
+        current.author = line.substring(7);
+      } else if (line.startsWith('author-time ')) {
+        current.time = parseInt(line.substring(12)) * 1000;
+      } else if (line.startsWith('summary ')) {
+        current.summary = line.substring(8);
+      } else if (line.startsWith('\t')) {
+        current.content = line.substring(1);
+      }
+    }
+    if (current.hash) blameData.push(current);
+    return { success: true, blame: blameData };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT BRANCH RENAME
+// ==========================================
+
+ipcMain.handle('git-branch-rename', async (event, repoPath, oldName, newName) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.raw(['branch', '-m', oldName, newName]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT LOG SEARCH
+// ==========================================
+
+ipcMain.handle('git-log-search', async (event, repoPath, query, maxCount) => {
+  try {
+    const git = simpleGit(repoPath);
+    const log = await git.log({ '--grep': query, '--max-count': maxCount || 50 });
+    return { success: true, log };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT DIFF STAT
+// ==========================================
+
+ipcMain.handle('git-diff-stat', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    const result = await git.raw(['diff', '--stat']);
+    return { success: true, stat: result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT REMOTE SET URL
+// ==========================================
+
+ipcMain.handle('git-remote-set-url', async (event, repoPath, remoteName, url) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.raw(['remote', 'set-url', remoteName, url]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: LOCAL FILE RENAME
+// ==========================================
+
+ipcMain.handle('local-rename-file', async (event, oldPath, newPath) => {
+  try {
+    const resolvedOld = path.resolve(oldPath);
+    const resolvedNew = path.resolve(newPath);
+    fs.renameSync(resolvedOld, resolvedNew);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: LOCAL CREATE DIRECTORY
+// ==========================================
+
+ipcMain.handle('local-create-dir', async (event, dirPath) => {
+  try {
+    const resolved = path.resolve(dirPath);
+    fs.mkdirSync(resolved, { recursive: true });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: LOCAL MOVE FILE
+// ==========================================
+
+ipcMain.handle('local-move-file', async (event, srcPath, destPath) => {
+  try {
+    const resolvedSrc = path.resolve(srcPath);
+    const resolvedDest = path.resolve(destPath);
+    fs.renameSync(resolvedSrc, resolvedDest);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: LOCAL FILE SEARCH (search content)
+// ==========================================
+
+ipcMain.handle('local-file-search', async (event, repoPath, query) => {
+  try {
+    const git = simpleGit(repoPath);
+    const result = await git.raw(['grep', '-n', '-i', '--', query]);
+    const matches = result.split('\n').filter(Boolean).slice(0, 100).map(line => {
+      const idx = line.indexOf(':');
+      const idx2 = line.indexOf(':', idx + 1);
+      return { file: line.substring(0, idx), line: line.substring(idx + 1, idx2), content: line.substring(idx2 + 1) };
+    });
+    return { success: true, matches };
+  } catch (err) {
+    if (err.message && err.message.includes('exit code 1')) return { success: true, matches: [] };
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT STASH WITH MESSAGE
+// ==========================================
+
+ipcMain.handle('git-stash-save', async (event, repoPath, message) => {
+  try {
+    const git = simpleGit(repoPath);
+    if (message) {
+      await git.raw(['stash', 'push', '-m', message]);
+    } else {
+      await git.stash();
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT STASH APPLY (by index)
+// ==========================================
+
+ipcMain.handle('git-stash-apply', async (event, repoPath, index) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.raw(['stash', 'apply', `stash@{${index}}`]);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT FETCH ALL REMOTES
+// ==========================================
+
+ipcMain.handle('git-fetch-all', async (event, repoPath) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.fetch(['--all', '--prune']);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ==========================================
+// NEW: GIT REMOTE ADD
+// ==========================================
+
+ipcMain.handle('git-remote-add', async (event, repoPath, name, url) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.addRemote(name, url);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});

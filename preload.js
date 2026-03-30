@@ -221,4 +221,43 @@ contextBridge.exposeInMainWorld('vulpax', {
   // Watchers & Forks list
   listWatchers: (owner, repo) => ipcRenderer.invoke('github-list-watchers', owner, repo),
   listForks: (owner, repo) => ipcRenderer.invoke('github-list-forks', owner, repo),
+
+  // NEW: Git Blame
+  gitBlame: (repoPath, filePath) => ipcRenderer.invoke('git-blame', repoPath, filePath),
+
+  // NEW: Git Branch Rename
+  gitBranchRename: (repoPath, oldName, newName) => ipcRenderer.invoke('git-branch-rename', repoPath, oldName, newName),
+
+  // NEW: Git Log Search
+  gitLogSearch: (repoPath, query, maxCount) => ipcRenderer.invoke('git-log-search', repoPath, query, maxCount),
+
+  // NEW: Git Diff Stat
+  gitDiffStat: (repoPath) => ipcRenderer.invoke('git-diff-stat', repoPath),
+
+  // NEW: Git Remote Set URL
+  gitRemoteSetUrl: (repoPath, name, url) => ipcRenderer.invoke('git-remote-set-url', repoPath, name, url),
+
+  // NEW: Local File Rename
+  localRenameFile: (oldPath, newPath) => ipcRenderer.invoke('local-rename-file', oldPath, newPath),
+
+  // NEW: Local Create Directory
+  localCreateDir: (dirPath) => ipcRenderer.invoke('local-create-dir', dirPath),
+
+  // NEW: Local Move File
+  localMoveFile: (srcPath, destPath) => ipcRenderer.invoke('local-move-file', srcPath, destPath),
+
+  // NEW: Local File Search
+  localFileSearch: (repoPath, query) => ipcRenderer.invoke('local-file-search', repoPath, query),
+
+  // NEW: Git Stash with message
+  gitStashSave: (repoPath, message) => ipcRenderer.invoke('git-stash-save', repoPath, message),
+
+  // NEW: Git Stash Apply by index
+  gitStashApply: (repoPath, index) => ipcRenderer.invoke('git-stash-apply', repoPath, index),
+
+  // NEW: Git Fetch All
+  gitFetchAll: (repoPath) => ipcRenderer.invoke('git-fetch-all', repoPath),
+
+  // NEW: Git Remote Add
+  gitRemoteAdd: (repoPath, name, url) => ipcRenderer.invoke('git-remote-add', repoPath, name, url),
 });

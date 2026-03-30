@@ -62,6 +62,7 @@ function navigateTo(page) {
   const activeBtn = document.querySelector(`.nav-item[data-page="${page}"]`);
   if (activeBtn) activeBtn.classList.add('active');
   renderPage(page);
+  updateStatusBar();
 }
 
 // ==========================================
@@ -120,6 +121,7 @@ function showApp() {
     document.getElementById('sidebar-username').textContent = currentUser.login;
   }
   navigateTo('dashboard');
+  initEnhancements();
 }
 
 // ==========================================
@@ -357,6 +359,22 @@ async function renderDashboard() {
         </div>
       </div>
       
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">⚡ Hızlı Erişim</h3>
+        </div>
+        <div class="local-quick-actions">
+          <button class="btn" onclick="navigateTo('localrepo')">📂 Yerel Repo</button>
+          <button class="btn" onclick="showQuickCommitPush()">⚡ Hızlı Commit+Push</button>
+          <button class="btn" onclick="navigateTo('search')">🔍 Arama</button>
+          <button class="btn" onclick="showActivityFeed()">📊 Aktivite</button>
+          <button class="btn" onclick="navigateTo('notifications')">🔔 Bildirimler</button>
+          <button class="btn" onclick="showKeyboardShortcuts()">⌨️ Kısayollar</button>
+          <button class="btn" onclick="exportRepoList()">📥 CSV İndir</button>
+          <button class="btn" onclick="detectSystemTheme()">🎨 Tema Algıla</button>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">${svgIcon('repo')} Son Güncellenen Repolar</h3>
@@ -1364,6 +1382,7 @@ async function renderSearch() {
 // ==========================================
 
 let localRepoTab = 'overview';
+let localTabRenderId = 0; // re-entrancy guard for tab rendering
 let editorCurrentFile = null;
 let editorFileTree = [];
 
@@ -1409,6 +1428,20 @@ async function renderLocalRepo() {
             <button class="btn" onclick="showInitModal()">${svgIcon('plus')} Git Init</button>
           </div>
         </div>
+        ${recentLocalPaths.length > 0 ? `
+          <div class="card mt-lg">
+            <div class="card-header"><h3 class="card-title">📂 Son Açılan Repolar</h3></div>
+            ${recentLocalPaths.map(p => `
+              <div class="list-item" onclick="localRepoPath='${escapeJsStr(p)}';localRepoTab='overview';saveRecentPath('${escapeJsStr(p)}');renderLocalRepo();updateStatusBarBranch();" style="cursor:pointer;">
+                <div class="list-item-icon">${svgIcon('folder')}</div>
+                <div class="list-item-content">
+                  <div class="list-item-title">${escapeHtml(p.split(/[\\/]/).pop())}</div>
+                  <div class="list-item-subtitle font-mono">${escapeHtml(p)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
       `}
     </div>
   `;
@@ -1420,14 +1453,18 @@ async function renderLocalRepo() {
 
 function switchLocalTab(tab) {
   localRepoTab = tab;
+  localTabRenderId++;
   document.querySelectorAll('.local-tab').forEach(b => b.classList.remove('active'));
-  const activeBtn = document.querySelector(`.local-tab:nth-child(${['overview','changes','history','branches','remotes','tags','stash','config','editor','files'].indexOf(tab) + 1})`);
-  if (activeBtn) activeBtn.classList.add('active');
-  document.getElementById('local-tab-content').innerHTML = loading();
+  const tabIndex = ['overview','changes','history','branches','remotes','tags','stash','config','editor','files'].indexOf(tab);
+  const allTabs = document.querySelectorAll('#local-tabs .local-tab');
+  if (allTabs[tabIndex]) allTabs[tabIndex].classList.add('active');
+  const tabContent = document.getElementById('local-tab-content');
+  if (tabContent) tabContent.innerHTML = loading();
   renderLocalTabContent();
 }
 
 async function renderLocalTabContent() {
+  const myRenderId = ++localTabRenderId;
   const tabs = {
     overview: renderLocalOverview,
     changes: renderLocalChanges,
@@ -1441,7 +1478,14 @@ async function renderLocalTabContent() {
     files: renderLocalFiles,
   };
   const fn = tabs[localRepoTab];
-  if (fn) await fn();
+  if (!fn) return;
+  try {
+    await fn();
+  } catch (err) {
+    if (myRenderId !== localTabRenderId) return;
+    const div = document.getElementById('local-tab-content');
+    if (div) div.innerHTML = `<div class="card" style="padding:20px;"><p class="text-danger">Sekme yüklenirken hata oluştu: ${escapeHtml(err.message || String(err))}</p><button class="btn mt-md" onclick="renderLocalTabContent()">Tekrar Dene</button></div>`;
+  }
 }
 
 async function selectLocalDir() {
@@ -1449,7 +1493,9 @@ async function selectLocalDir() {
   if (result.success && result.path) {
     localRepoPath = result.path;
     localRepoTab = 'overview';
+    saveRecentPath(result.path);
     renderLocalRepo();
+    updateStatusBarBranch();
   }
 }
 
@@ -1518,15 +1564,22 @@ async function doInit() {
 
 async function renderLocalOverview() {
   const div = document.getElementById('local-tab-content');
+  if (!div) return;
   div.innerHTML = loading();
 
-  const [statusRes, logRes, branchRes, remoteRes, tagRes] = await Promise.all([
-    V.gitStatus(localRepoPath),
-    V.gitLog(localRepoPath, 5),
-    V.gitBranchLocal(localRepoPath),
-    V.gitRemoteList(localRepoPath),
-    V.gitTagList(localRepoPath)
-  ]);
+  let statusRes, logRes, branchRes, remoteRes, tagRes;
+  try {
+    [statusRes, logRes, branchRes, remoteRes, tagRes] = await Promise.all([
+      V.gitStatus(localRepoPath),
+      V.gitLog(localRepoPath, 5),
+      V.gitBranchLocal(localRepoPath),
+      V.gitRemoteList(localRepoPath),
+      V.gitTagList(localRepoPath)
+    ]);
+  } catch (err) {
+    div.innerHTML = `<div class="card" style="padding:20px;"><p class="text-danger">Veri yüklenirken hata: ${escapeHtml(err.message)}</p><button class="btn mt-md" onclick="renderLocalOverview()">Tekrar Dene</button></div>`;
+    return;
+  }
 
   const status = statusRes.success ? statusRes.status : null;
   const log = logRes.success ? logRes.log : null;
@@ -1593,9 +1646,11 @@ async function renderLocalOverview() {
         <button class="btn btn-success" onclick="doGitAddAll()">${svgIcon('plus')} Tümünü Stage</button>
         <button class="btn btn-primary" onclick="showCommitModal()">${svgIcon('commit')} Commit</button>
         <button class="btn btn-info" onclick="showPushModal()">${svgIcon('link')} Push</button>
+        <button class="btn btn-warning" onclick="showQuickCommitPush()">⚡ Hızlı Commit+Push</button>
         <button class="btn" onclick="showPullModal()">${svgIcon('download')} Pull</button>
         <button class="btn" onclick="doGitFetch()">${svgIcon('refresh')} Fetch</button>
-        <button class="btn" onclick="doGitStash()">📦 Stash</button>
+        <button class="btn" onclick="doGitFetchAll()">🔄 Fetch All</button>
+        <button class="btn" onclick="showNamedStashModal()">📦 Stash</button>
         <button class="btn" onclick="doGitStashPop()">📤 Stash Pop</button>
         <button class="btn" onclick="showDiffModal()">🔍 Diff</button>
         <button class="btn" onclick="showStagedDiffModal()">📋 Staged Diff</button>
@@ -1603,6 +1658,12 @@ async function renderLocalOverview() {
         <button class="btn btn-warning" onclick="doGitReset('mixed')">↩️ Reset Mixed</button>
         <button class="btn btn-danger" onclick="doGitReset('hard')">⚠️ Reset Hard</button>
         <button class="btn btn-danger" onclick="doGitClean()">🧹 Clean</button>
+        <button class="btn" onclick="showDiffStat()">📊 Diff Stat</button>
+        <button class="btn" onclick="showFileSearchModal()">🔎 Dosya Ara</button>
+        <button class="btn" onclick="showLogSearchModal()">📜 Commit Ara</button>
+        <button class="btn" onclick="showBlameModal()">👤 Blame</button>
+        <button class="btn" onclick="showCreateDirModal()">📁 Klasör Oluştur</button>
+        <button class="btn" onclick="toggleAutoRefresh()">🔄 Oto-Yenile</button>
         <button class="btn" onclick="renderLocalRepo()">${svgIcon('refresh')} Yenile</button>
       </div>
     </div>
@@ -1658,9 +1719,16 @@ async function doInitHere() {
 
 async function renderLocalChanges() {
   const div = document.getElementById('local-tab-content');
+  if (!div) return;
   div.innerHTML = loading();
 
-  const statusRes = await V.gitStatus(localRepoPath);
+  let statusRes;
+  try {
+    statusRes = await V.gitStatus(localRepoPath);
+  } catch (err) {
+    div.innerHTML = `<div class="card" style="padding:20px;"><p class="text-danger">Durum yüklenirken hata: ${escapeHtml(err.message)}</p><button class="btn mt-md" onclick="renderLocalChanges()">Tekrar Dene</button></div>`;
+    return;
+  }
   if (!statusRes.success) { div.innerHTML = `<p class="text-danger">Hata: ${escapeHtml(statusRes.error)}</p>`; return; }
   const s = statusRes.status;
   const staged = s.staged || [];
@@ -1673,6 +1741,8 @@ async function renderLocalChanges() {
     <div class="flex-row gap-md mb-md flex-wrap">
       <button class="btn btn-success" onclick="doGitAddAll()">${svgIcon('plus')} Tümünü Stage</button>
       <button class="btn btn-primary" onclick="showCommitModal()">${svgIcon('commit')} Commit</button>
+      <button class="btn btn-info" onclick="showPushModal()">${svgIcon('link')} Push</button>
+      <button class="btn btn-warning" onclick="showQuickCommitPush()">⚡ Hızlı Commit+Push</button>
       <button class="btn" onclick="showAmendModal()">✏️ Amend</button>
       <button class="btn" onclick="showDiffModal()">🔍 Working Diff</button>
       <button class="btn" onclick="showStagedDiffModal()">📋 Staged Diff</button>
@@ -1727,7 +1797,8 @@ async function renderLocalChanges() {
               <button class="btn btn-sm btn-success" onclick="doStageFile('${escapeJsStr(f)}')" title="Stage">${svgIcon('plus')}</button>
               <button class="btn btn-sm" onclick="showFileDiffModal('${escapeJsStr(f)}')" title="Diff">🔍</button>
               <button class="btn btn-sm" onclick="showFileHistoryModal('${escapeJsStr(f)}')" title="Geçmiş">📜</button>
-              <button class="btn btn-sm" onclick="openFileInEditorFromChanges('${escapeJsStr(f)}')" title="Düzenle">✏️</button>
+              <button class="btn btn-sm" onclick="showRenameFileModal('${escapeJsStr(f)}')" title="Yeniden Adlandır">✏️</button>
+              <button class="btn btn-sm" onclick="openFileInEditorFromChanges('${escapeJsStr(f)}')" title="Düzenle">📝</button>
             </div>
           </div>
         `).join('')}
@@ -1805,6 +1876,20 @@ async function doUnstageAll() {
 
 function showCommitModal() {
   openModal('Commit', `
+    <div class="input-group">
+      <label>Şablon</label>
+      <select onchange="document.getElementById('commit-msg').value=this.value;document.getElementById('commit-msg').focus();">
+        <option value="">Şablon seç...</option>
+        <option value="feat: ">feat: Yeni özellik</option>
+        <option value="fix: ">fix: Hata düzeltme</option>
+        <option value="docs: ">docs: Dokümantasyon</option>
+        <option value="style: ">style: Stil</option>
+        <option value="refactor: ">refactor: Yeniden yapılandırma</option>
+        <option value="perf: ">perf: Performans</option>
+        <option value="test: ">test: Test</option>
+        <option value="chore: ">chore: Diğer</option>
+      </select>
+    </div>
     <div class="input-group"><label>Commit Mesajı</label><textarea id="commit-msg" placeholder="feat: açıklayıcı bir commit mesajı yazın" style="min-height:100px;"></textarea></div>
     <button class="btn btn-primary btn-block mt-md" onclick="doGitCommit()">Commit</button>
   `);
@@ -1994,8 +2079,9 @@ async function renderLocalHistory() {
   const commits = logRes.log?.all || [];
 
   div.innerHTML = `
-    <div class="flex-row gap-md mb-md">
+    <div class="flex-row gap-md mb-md flex-wrap">
       <button class="btn" onclick="renderLocalHistory()">${svgIcon('refresh')} Yenile</button>
+      <button class="btn" onclick="showLogSearchModal()">🔍 Commit Ara</button>
     </div>
     <div class="card" style="padding:0;">
       <div class="card-header" style="padding:16px;"><h3 class="card-title">${svgIcon('commit')} Commit Geçmişi (${commits.length})</h3></div>
@@ -2006,13 +2092,14 @@ async function renderLocalHistory() {
             <div class="commit-info">
               <div class="commit-message">${escapeHtml(c.message.split('\n')[0])}</div>
               <div class="commit-meta">
-                <span class="commit-sha">${c.hash.substring(0, 7)}</span>
+                <span class="commit-sha" onclick="event.stopPropagation();copyToClipboard('${escapeHtml(c.hash)}')" title="SHA kopyala">${c.hash.substring(0, 7)}</span>
                 <span>${escapeHtml(c.author_name)}</span>
                 <span>${escapeHtml(c.author_email)}</span>
                 <span>${timeAgo(c.date)}</span>
               </div>
             </div>
             <div class="list-item-actions">
+              <button class="btn btn-sm" onclick="event.stopPropagation();copyToClipboard('${escapeHtml(c.hash)}')" title="SHA Kopyala">📋</button>
               <button class="btn btn-sm" onclick="event.stopPropagation();doCherryPick('${escapeHtml(c.hash)}')" title="Cherry-pick">🍒</button>
               <button class="btn btn-sm" onclick="event.stopPropagation();doRevertCommit('${escapeHtml(c.hash)}')" title="Revert">↩️</button>
             </div>
@@ -2082,9 +2169,10 @@ async function renderLocalBranches() {
           <div class="list-item-actions">
             ${name !== current ? `
               <button class="btn btn-sm btn-success" onclick="doSwitchBranch('${escapeJsStr(name)}')" title="Bu branch'e geç">${svgIcon('check')} Geç</button>
+              <button class="btn btn-sm" onclick="showRenameBranchModal('${escapeJsStr(name)}')" title="Yeniden Adlandır">✏️</button>
               <button class="btn btn-sm" onclick="doMergeBranch('${escapeJsStr(name)}')" title="Mevcut branch'e merge et">🔀 Merge</button>
               <button class="btn btn-sm btn-danger" onclick="doDeleteLocalBranch('${escapeJsStr(name)}')" title="Sil">${svgIcon('trash')}</button>
-            ` : ''}
+            ` : '<span class="badge badge-success">aktif</span>'}
           </div>
         </div>
       `).join('')}
@@ -2152,8 +2240,9 @@ async function renderLocalRemotes() {
   const remotes = result.success ? result.remotes : [];
 
   div.innerHTML = `
-    <div class="flex-row gap-md mb-md">
+    <div class="flex-row gap-md mb-md flex-wrap">
       <button class="btn btn-primary" onclick="showAddRemoteModal()">${svgIcon('plus')} Remote Ekle</button>
+      <button class="btn btn-info" onclick="doGitFetchAll()">🔄 Fetch All</button>
       <button class="btn" onclick="renderLocalRemotes()">${svgIcon('refresh')} Yenile</button>
     </div>
     <div class="card">
@@ -2169,6 +2258,7 @@ async function renderLocalRemotes() {
             <div class="list-item-actions">
               <button class="btn btn-sm btn-info" onclick="doGitPushToRemote('${escapeJsStr(r.name)}')" title="Push">Push</button>
               <button class="btn btn-sm" onclick="doGitPullFromRemote('${escapeJsStr(r.name)}')" title="Pull">Pull</button>
+              <button class="btn btn-sm" onclick="showSetRemoteUrlModal('${escapeJsStr(r.name)}')" title="URL Değiştir">🔗</button>
               <button class="btn btn-sm btn-danger" onclick="doRemoveRemote('${escapeJsStr(r.name)}')" title="Kaldır">${svgIcon('trash')}</button>
             </div>
           </div>
@@ -2285,8 +2375,9 @@ async function renderLocalStash() {
   const stashes = result.success ? result.stashes : { all: [] };
 
   div.innerHTML = `
-    <div class="flex-row gap-md mb-md">
-      <button class="btn btn-primary" onclick="doGitStash()">📦 Stash Yap</button>
+    <div class="flex-row gap-md mb-md flex-wrap">
+      <button class="btn btn-primary" onclick="showNamedStashModal()">📦 Mesajlı Stash</button>
+      <button class="btn" onclick="doGitStash()">📦 Hızlı Stash</button>
       <button class="btn btn-success" onclick="doGitStashPop()">📤 Stash Pop</button>
       <button class="btn" onclick="renderLocalStash()">${svgIcon('refresh')} Yenile</button>
     </div>
@@ -2301,6 +2392,7 @@ async function renderLocalStash() {
               <div class="list-item-subtitle">${escapeHtml(s.hash?.substring(0, 7) || '')} · ${timeAgo(s.date)}</div>
             </div>
             <div class="list-item-actions">
+              <button class="btn btn-sm btn-success" onclick="doStashApply(${i})" title="Apply (kaldırmadan uygula)">📥 Apply</button>
               <button class="btn btn-sm" onclick="showStashDetail(${i})" title="Detay">🔍</button>
               <button class="btn btn-sm btn-danger" onclick="doStashDrop(${i})" title="Sil">${svgIcon('trash')}</button>
             </div>
@@ -4183,10 +4275,23 @@ function exportRepoList() {
 }
 
 // ==========================================
-// KEYBOARD SHORTCUTS
+// KEYBOARD SHORTCUTS (enhanced)
 // ==========================================
 
 document.addEventListener('keydown', (e) => {
+  // Command palette: Ctrl+Shift+P (works everywhere)
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+    e.preventDefault();
+    toggleCommandPalette();
+    return;
+  }
+
+  // Escape to close command palette
+  if (e.key === 'Escape') {
+    const cp = document.getElementById('command-palette-overlay');
+    if (cp && cp.style.display !== 'none') { cp.style.display = 'none'; return; }
+  }
+
   // Only when not typing in input/textarea
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   
@@ -4198,8 +4303,836 @@ document.addEventListener('keydown', (e) => {
       case '4': e.preventDefault(); navigateTo('commits'); break;
       case '5': e.preventDefault(); navigateTo('pullrequests'); break;
       case '6': e.preventDefault(); navigateTo('issues'); break;
+      case '7': e.preventDefault(); navigateTo('localrepo'); break;
+      case '8': e.preventDefault(); navigateTo('search'); break;
       case 'k': e.preventDefault(); navigateTo('search'); setTimeout(() => { const el = document.getElementById('global-search'); if (el) el.focus(); }, 100); break;
       case 'n': e.preventDefault(); navigateTo('notifications'); break;
+      case 'b': e.preventDefault(); navigateTo('branches'); break;
     }
   }
+
+  // Quick shortcuts (no modifier)
+  if (e.key === '?' && !e.ctrlKey && !e.shiftKey) {
+    e.preventDefault();
+    showKeyboardShortcuts();
+  }
 });
+
+// ==========================================
+// SIDEBAR TOGGLE
+// ==========================================
+
+function initSidebarToggle() {
+  const btn = document.getElementById('sidebar-toggle');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('collapsed');
+    });
+  }
+}
+
+// ==========================================
+// COMMAND PALETTE
+// ==========================================
+
+function toggleCommandPalette() {
+  const overlay = document.getElementById('command-palette-overlay');
+  if (overlay.style.display === 'none') {
+    overlay.style.display = 'flex';
+    const input = document.getElementById('command-palette-input');
+    input.value = '';
+    input.focus();
+    renderCommandResults('');
+    input.addEventListener('input', (e) => renderCommandResults(e.target.value));
+    input.addEventListener('keydown', handleCommandPaletteKeys);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
+  } else {
+    overlay.style.display = 'none';
+  }
+}
+
+function handleCommandPaletteKeys(e) {
+  const results = document.getElementById('command-palette-results');
+  const items = results.querySelectorAll('.command-item');
+  const active = results.querySelector('.command-item.active');
+  
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (active) { active.classList.remove('active'); const next = active.nextElementSibling || items[0]; next?.classList.add('active'); }
+    else if (items[0]) items[0].classList.add('active');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (active) { active.classList.remove('active'); const prev = active.previousElementSibling || items[items.length - 1]; prev?.classList.add('active'); }
+    else if (items[items.length - 1]) items[items.length - 1].classList.add('active');
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (active) active.click();
+  }
+}
+
+const commandPaletteCommands = [
+  { label: 'Dashboard\'a Git', action: () => navigateTo('dashboard'), keywords: 'anasayfa home dashboard' },
+  { label: 'Repolar', action: () => navigateTo('repos'), keywords: 'repos depolar repositories' },
+  { label: 'Branch\'ler', action: () => navigateTo('branches'), keywords: 'dallar branches' },
+  { label: 'Commit\'ler', action: () => navigateTo('commits'), keywords: 'commits' },
+  { label: 'Pull Request\'ler', action: () => navigateTo('pullrequests'), keywords: 'pr merge' },
+  { label: 'Issue\'lar', action: () => navigateTo('issues'), keywords: 'sorunlar issues' },
+  { label: 'Actions', action: () => navigateTo('actions'), keywords: 'workflow ci cd' },
+  { label: 'Release\'ler', action: () => navigateTo('releases'), keywords: 'sürümler' },
+  { label: 'Gist\'ler', action: () => navigateTo('gists'), keywords: 'snippet' },
+  { label: 'Yıldızlar', action: () => navigateTo('stars'), keywords: 'stars favoriler' },
+  { label: 'Bildirimler', action: () => navigateTo('notifications'), keywords: 'notifications' },
+  { label: 'Arama', action: () => navigateTo('search'), keywords: 'search bul' },
+  { label: 'Yerel Repo', action: () => navigateTo('localrepo'), keywords: 'local git' },
+  { label: 'İşbirlikçiler', action: () => navigateTo('collaborators'), keywords: 'collaborators team' },
+  { label: 'Dosya Tarayıcı', action: () => navigateTo('filebrowser'), keywords: 'files browser' },
+  { label: 'Organizasyonlar', action: () => navigateTo('organizations'), keywords: 'org' },
+  { label: 'Profil', action: () => navigateTo('profile'), keywords: 'profile kullanıcı' },
+  { label: 'Öğreticiler', action: () => navigateTo('tutorials'), keywords: 'tutorials rehber' },
+  { label: 'Ayarlar', action: () => navigateTo('settings'), keywords: 'settings tema theme' },
+  { label: 'Aktivite Akışı', action: () => showActivityFeed(), keywords: 'activity events' },
+  { label: 'Repo Listesini Dışa Aktar (CSV)', action: () => exportRepoList(), keywords: 'export csv' },
+  { label: 'Tüm Bildirimleri Okundu İşaretle', action: () => markAllNotifsRead(), keywords: 'mark all read' },
+  { label: 'Tema: Koyu', action: () => setTheme('dark'), keywords: 'dark karanlık' },
+  { label: 'Tema: Loş', action: () => setTheme('dimmed'), keywords: 'dimmed' },
+  { label: 'Tema: Açık', action: () => setTheme('light'), keywords: 'light aydınlık' },
+  { label: 'Kısayolları Göster', action: () => showKeyboardShortcuts(), keywords: 'shortcuts klavye' },
+  { label: 'Hızlı Commit+Push', action: () => showQuickCommitPush(), keywords: 'commit push hızlı' },
+  { label: 'Dosya Ara (Yerel Repo)', action: () => showFileSearchModal(), keywords: 'file search grep' },
+  { label: 'Git Blame', action: () => showBlameModal(), keywords: 'blame suçla' },
+  { label: 'Kenar Çubuğunu Aç/Kapat', action: () => { document.getElementById('sidebar').classList.toggle('collapsed'); }, keywords: 'sidebar toggle' },
+];
+
+function renderCommandResults(query) {
+  const div = document.getElementById('command-palette-results');
+  const q = query.toLowerCase();
+  const filtered = q ? commandPaletteCommands.filter(c => 
+    c.label.toLowerCase().includes(q) || c.keywords.toLowerCase().includes(q)
+  ) : commandPaletteCommands;
+  
+  div.innerHTML = filtered.slice(0, 15).map((c, i) => `
+    <div class="command-item ${i === 0 && q ? 'active' : ''}" onclick="executeCommand(${commandPaletteCommands.indexOf(c)})">
+      <span>${escapeHtml(c.label)}</span>
+    </div>
+  `).join('') || '<div class="text-muted" style="padding:12px;">Sonuç bulunamadı</div>';
+}
+
+function executeCommand(index) {
+  document.getElementById('command-palette-overlay').style.display = 'none';
+  commandPaletteCommands[index]?.action();
+}
+
+// ==========================================
+// KEYBOARD SHORTCUTS HELP
+// ==========================================
+
+function showKeyboardShortcuts() {
+  openModal('Klavye Kısayolları', `
+    <div style="display:grid;gap:8px;">
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Komut Paleti</span><kbd class="kbd">Ctrl+Shift+P</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Dashboard</span><kbd class="kbd">Ctrl+1</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Repolar</span><kbd class="kbd">Ctrl+2</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Branch'ler</span><kbd class="kbd">Ctrl+3</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Commit'ler</span><kbd class="kbd">Ctrl+4</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Pull Request'ler</span><kbd class="kbd">Ctrl+5</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Issue'lar</span><kbd class="kbd">Ctrl+6</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Yerel Repo</span><kbd class="kbd">Ctrl+7</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Arama</span><kbd class="kbd">Ctrl+8</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Arama Odakla</span><kbd class="kbd">Ctrl+K</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-muted);"><span>Bildirimler</span><kbd class="kbd">Ctrl+N</kbd></div>
+      <div class="flex-row" style="justify-content:space-between;padding:6px 0;"><span>Kısayolları Göster</span><kbd class="kbd">?</kbd></div>
+    </div>
+  `);
+}
+
+// ==========================================
+// STATUS BAR
+// ==========================================
+
+function updateStatusBar() {
+  const pageNames = {
+    dashboard: 'Dashboard', repos: 'Repolar', branches: "Branch'ler", commits: "Commit'ler",
+    pullrequests: 'Pull Request', issues: "Issue'lar", actions: 'Actions', releases: "Release'ler",
+    gists: "Gist'ler", stars: 'Yıldızlar', notifications: 'Bildirimler', search: 'Arama',
+    localrepo: 'Yerel Repo', collaborators: 'İşbirlikçiler', filebrowser: 'Dosyalar',
+    organizations: 'Organizasyonlar', profile: 'Profil', tutorials: 'Öğreticiler', settings: 'Ayarlar'
+  };
+  const pageEl = document.getElementById('status-bar-page');
+  if (pageEl) pageEl.textContent = pageNames[currentPage] || currentPage;
+  
+  const repoEl = document.getElementById('status-repo-name');
+  if (repoEl && selectedRepo) repoEl.textContent = selectedRepo.full_name || selectedRepo.name;
+  
+  updateStatusBarBranch();
+}
+
+async function updateStatusBarBranch() {
+  if (!localRepoPath) return;
+  try {
+    const branchRes = await V.gitBranchLocal(localRepoPath);
+    if (branchRes.success) {
+      const el = document.getElementById('status-branch-name');
+      if (el) el.textContent = branchRes.branches.current || '-';
+    }
+    const statusRes = await V.gitStatus(localRepoPath);
+    if (statusRes.success) {
+      const s = statusRes.status;
+      const count = (s.staged?.length || 0) + (s.modified?.length || 0) + (s.not_added?.length || 0);
+      const changesEl = document.getElementById('status-bar-changes');
+      const countEl = document.getElementById('status-changes-count');
+      if (changesEl && countEl) {
+        if (count > 0) {
+          changesEl.style.display = '';
+          countEl.textContent = count + ' değişiklik';
+        } else {
+          changesEl.style.display = 'none';
+        }
+      }
+    }
+  } catch (e) { /* silent */ }
+}
+
+// ==========================================
+// NOTIFICATION BADGE
+// ==========================================
+
+async function updateNotificationBadge() {
+  try {
+    const result = await V.listNotifications();
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    if (result.success && result.notifications.length > 0) {
+      badge.style.display = '';
+      badge.textContent = result.notifications.length;
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) { /* silent */ }
+}
+
+// ==========================================
+// QUICK COMMIT + PUSH
+// ==========================================
+
+function showQuickCommitPush() {
+  if (!localRepoPath) return toast('Önce yerel repo seçin', 'error');
+  openModal('⚡ Hızlı Commit + Push', `
+    <p class="text-muted text-sm mb-md">Tüm değişiklikleri stage edip, commit yapıp push eder.</p>
+    <div class="input-group">
+      <label>Commit Mesajı</label>
+      <textarea id="quick-commit-msg" placeholder="feat: açıklama" style="min-height:80px;"></textarea>
+    </div>
+    <div class="input-group">
+      <label>Mesaj Şablonu</label>
+      <select id="commit-template" onchange="applyCommitTemplate()">
+        <option value="">Şablon seç...</option>
+        <option value="feat: ">✨ feat: Yeni özellik</option>
+        <option value="fix: ">🐛 fix: Hata düzeltme</option>
+        <option value="docs: ">📝 docs: Dokümantasyon</option>
+        <option value="style: ">💎 style: Stil değişikliği</option>
+        <option value="refactor: ">♻️ refactor: Yeniden yapılandırma</option>
+        <option value="perf: ">⚡ perf: Performans iyileştirme</option>
+        <option value="test: ">🧪 test: Test ekleme/düzeltme</option>
+        <option value="chore: ">🔧 chore: Araç/yapılandırma</option>
+        <option value="ci: ">👷 ci: CI/CD değişikliği</option>
+        <option value="revert: ">⏪ revert: Geri alma</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>Remote</label>
+      <input type="text" id="quick-push-remote" value="origin">
+    </div>
+    <div class="input-group">
+      <label>Branch (boş = mevcut)</label>
+      <input type="text" id="quick-push-branch" placeholder="main">
+    </div>
+    <button class="btn btn-warning btn-block mt-md" onclick="doQuickCommitPush()">⚡ Stage + Commit + Push</button>
+  `);
+}
+
+function applyCommitTemplate() {
+  const tpl = document.getElementById('commit-template').value;
+  const msg = document.getElementById('quick-commit-msg');
+  if (tpl && msg) {
+    msg.value = tpl;
+    msg.focus();
+    msg.setSelectionRange(tpl.length, tpl.length);
+  }
+}
+
+async function doQuickCommitPush() {
+  const msg = document.getElementById('quick-commit-msg').value.trim();
+  if (!msg) return toast('Commit mesajı gerekli', 'error');
+  const remote = document.getElementById('quick-push-remote')?.value?.trim() || 'origin';
+  const branch = document.getElementById('quick-push-branch')?.value?.trim() || undefined;
+  
+  closeModal();
+  toast('Stage ediliyor...', 'info');
+  
+  const addResult = await V.gitAdd(localRepoPath, '.');
+  if (!addResult.success) return toast('Stage hatası: ' + addResult.error, 'error');
+  
+  toast('Commit yapılıyor...', 'info');
+  const commitResult = await V.gitCommit(localRepoPath, msg);
+  if (!commitResult.success) return toast('Commit hatası: ' + commitResult.error, 'error');
+  
+  toast('Push yapılıyor...', 'info');
+  const pushResult = await V.gitPush(localRepoPath, remote, branch);
+  if (pushResult.success) {
+    toast('Commit + Push tamamlandı!', 'success');
+    refreshLocalTab();
+    updateStatusBarBranch();
+  } else {
+    toast('Push hatası: ' + pushResult.error, 'error');
+  }
+}
+
+// ==========================================
+// COMMIT MESSAGE TEMPLATES (in standard commit modal)
+// ==========================================
+
+function showCommitModalWithTemplate() {
+  openModal('Commit', `
+    <div class="input-group">
+      <label>Şablon</label>
+      <select onchange="document.getElementById('commit-msg').value=this.value;document.getElementById('commit-msg').focus();">
+        <option value="">Şablon seç...</option>
+        <option value="feat: ">feat: Yeni özellik</option>
+        <option value="fix: ">fix: Hata düzeltme</option>
+        <option value="docs: ">docs: Dokümantasyon</option>
+        <option value="style: ">style: Stil</option>
+        <option value="refactor: ">refactor: Yeniden yapılandırma</option>
+        <option value="perf: ">perf: Performans</option>
+        <option value="test: ">test: Test</option>
+        <option value="chore: ">chore: Araç/yapılandırma</option>
+      </select>
+    </div>
+    <div class="input-group"><label>Commit Mesajı</label><textarea id="commit-msg" placeholder="feat: açıklayıcı bir commit mesajı yazın" style="min-height:100px;"></textarea></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doGitCommit()">Commit</button>
+  `);
+}
+
+// ==========================================
+// FILE SEARCH (LOCAL REPO)
+// ==========================================
+
+function showFileSearchModal() {
+  if (!localRepoPath) return toast('Önce yerel repo seçin', 'error');
+  openModal('Dosya İçerik Arama', `
+    <div class="input-group">
+      <label>Aranacak Metin</label>
+      <div class="flex-row gap-sm">
+        <input type="text" id="file-search-query" placeholder="ara..." style="flex:1;">
+        <button class="btn btn-primary" onclick="doFileSearch()">Ara</button>
+      </div>
+    </div>
+    <div id="file-search-results" style="max-height:50vh;overflow:auto;"></div>
+  `);
+  setTimeout(() => document.getElementById('file-search-query')?.focus(), 100);
+}
+
+async function doFileSearch() {
+  const query = document.getElementById('file-search-query')?.value?.trim();
+  if (!query) return;
+  const div = document.getElementById('file-search-results');
+  div.innerHTML = loading();
+  
+  const result = await V.localFileSearch(localRepoPath, query);
+  if (!result.success) { div.innerHTML = `<p class="text-danger">${escapeHtml(result.error)}</p>`; return; }
+  
+  const matches = result.matches || [];
+  div.innerHTML = matches.length === 0 ? '<p class="text-muted mt-md">Sonuç bulunamadı</p>' : `
+    <p class="text-muted text-sm mt-md mb-sm">${matches.length} sonuç bulundu</p>
+    ${matches.map(m => `
+      <div class="file-item" onclick="openFileInEditorFromChanges('${escapeJsStr(m.file)}')" style="cursor:pointer;">
+        <span class="file-icon file">${svgIcon('file')}</span>
+        <span class="file-name">${escapeHtml(m.file)}</span>
+        <span class="text-muted text-sm">Satır ${escapeHtml(m.line)}</span>
+        <span class="text-sm font-mono" style="color:var(--text-secondary);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.content)}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ==========================================
+// GIT BLAME VIEWER
+// ==========================================
+
+function showBlameModal() {
+  if (!localRepoPath) return toast('Önce yerel repo seçin', 'error');
+  openModal('Git Blame', `
+    <div class="input-group">
+      <label>Dosya Yolu (repo içindeki)</label>
+      <div class="flex-row gap-sm">
+        <input type="text" id="blame-file" placeholder="src/main.js" style="flex:1;">
+        <button class="btn btn-primary" onclick="doGitBlame()">Blame</button>
+      </div>
+    </div>
+    <div id="blame-results" style="max-height:55vh;overflow:auto;"></div>
+  `);
+}
+
+async function doGitBlame() {
+  const file = document.getElementById('blame-file')?.value?.trim();
+  if (!file) return toast('Dosya yolu gerekli', 'error');
+  const div = document.getElementById('blame-results');
+  div.innerHTML = loading();
+  
+  const result = await V.gitBlame(localRepoPath, file);
+  if (!result.success) { div.innerHTML = `<p class="text-danger">${escapeHtml(result.error)}</p>`; return; }
+  
+  const blame = result.blame || [];
+  div.innerHTML = blame.length === 0 ? '<p class="text-muted">Blame verisi bulunamadı</p>' : `
+    <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12px;">
+      <thead><tr style="border-bottom:1px solid var(--border-muted);">
+        <th style="text-align:left;padding:4px 8px;color:var(--text-muted);">SHA</th>
+        <th style="text-align:left;padding:4px 8px;color:var(--text-muted);">Yazar</th>
+        <th style="text-align:left;padding:4px 8px;color:var(--text-muted);">Satır</th>
+        <th style="text-align:left;padding:4px 8px;color:var(--text-muted);">İçerik</th>
+      </tr></thead>
+      <tbody>
+      ${blame.map(b => `
+        <tr style="border-bottom:1px solid var(--border-muted);" title="${escapeHtml(b.summary || '')}">
+          <td style="padding:2px 8px;color:var(--text-link);cursor:pointer;" onclick="copyToClipboard('${escapeHtml(b.hash)}')">${(b.hash || '').substring(0, 7)}</td>
+          <td style="padding:2px 8px;color:var(--text-secondary);">${escapeHtml(b.author || '')}</td>
+          <td style="padding:2px 8px;color:var(--text-muted);">${b.finalLine || ''}</td>
+          <td style="padding:2px 8px;white-space:pre;">${escapeHtml(b.content || '')}</td>
+        </tr>
+      `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ==========================================
+// COPY TO CLIPBOARD
+// ==========================================
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast('Kopyalandı: ' + text.substring(0, 20), 'success');
+  }).catch(() => {
+    toast('Kopyalama başarısız', 'error');
+  });
+}
+
+// ==========================================
+// BRANCH RENAME
+// ==========================================
+
+function showRenameBranchModal(oldName) {
+  openModal('Branch Yeniden Adlandır', `
+    <div class="input-group"><label>Mevcut İsim</label><input type="text" value="${escapeHtml(oldName)}" disabled></div>
+    <div class="input-group"><label>Yeni İsim</label><input type="text" id="new-branch-name" placeholder="feature/yeni-isim"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doRenameBranch('${escapeJsStr(oldName)}')">Yeniden Adlandır</button>
+  `);
+}
+
+async function doRenameBranch(oldName) {
+  const newName = document.getElementById('new-branch-name')?.value?.trim();
+  if (!newName) return toast('Yeni isim gerekli', 'error');
+  const result = await V.gitBranchRename(localRepoPath, oldName, newName);
+  if (result.success) { toast('Branch yeniden adlandırıldı', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ==========================================
+// NAMED STASH
+// ==========================================
+
+function showNamedStashModal() {
+  openModal('Stash Kaydet', `
+    <div class="input-group"><label>Mesaj (opsiyonel)</label><input type="text" id="stash-message" placeholder="WIP: açıklama"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doNamedStash()">Stash</button>
+  `);
+}
+
+async function doNamedStash() {
+  const message = document.getElementById('stash-message')?.value?.trim();
+  const result = await V.gitStashSave(localRepoPath, message || undefined);
+  if (result.success) { toast('Stash kaydedildi', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+async function doStashApply(index) {
+  const result = await V.gitStashApply(localRepoPath, index);
+  if (result.success) { toast('Stash uygulandı', 'success'); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ==========================================
+// REMOTE MANAGEMENT ENHANCEMENTS
+// ==========================================
+
+function showAddRemoteModal() {
+  openModal('Remote Ekle', `
+    <div class="input-group"><label>Remote Adı</label><input type="text" id="remote-name" placeholder="upstream"></div>
+    <div class="input-group"><label>URL</label><input type="url" id="remote-url" placeholder="https://github.com/user/repo.git"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doAddRemote()">Ekle</button>
+  `);
+}
+
+async function doAddRemote() {
+  const name = document.getElementById('remote-name')?.value?.trim();
+  const url = document.getElementById('remote-url')?.value?.trim();
+  if (!name || !url) return toast('Tüm alanları doldurun', 'error');
+  const result = await V.gitRemoteAdd(localRepoPath, name, url);
+  if (result.success) { toast('Remote eklendi', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+function showSetRemoteUrlModal(remoteName) {
+  openModal('Remote URL Değiştir', `
+    <div class="input-group"><label>Remote</label><input type="text" value="${escapeHtml(remoteName)}" disabled></div>
+    <div class="input-group"><label>Yeni URL</label><input type="url" id="new-remote-url" placeholder="https://github.com/user/repo.git"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doSetRemoteUrl('${escapeJsStr(remoteName)}')">Güncelle</button>
+  `);
+}
+
+async function doSetRemoteUrl(remoteName) {
+  const url = document.getElementById('new-remote-url')?.value?.trim();
+  if (!url) return toast('URL gerekli', 'error');
+  const result = await V.gitRemoteSetUrl(localRepoPath, remoteName, url);
+  if (result.success) { toast('Remote URL güncellendi', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ==========================================
+// FETCH ALL REMOTES
+// ==========================================
+
+async function doGitFetchAll() {
+  toast('Tüm remote\'lar fetch ediliyor...', 'info');
+  const result = await V.gitFetchAll(localRepoPath);
+  if (result.success) toast('Fetch all tamamlandı', 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ==========================================
+// FILE MANAGEMENT (LOCAL)
+// ==========================================
+
+function showCreateDirModal() {
+  if (!localRepoPath) return toast('Önce yerel repo seçin', 'error');
+  openModal('Klasör Oluştur', `
+    <div class="input-group"><label>Klasör Yolu (repo kökünden)</label><input type="text" id="new-dir-path" placeholder="src/components"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doCreateDir()">Oluştur</button>
+  `);
+}
+
+async function doCreateDir() {
+  const dirPath = document.getElementById('new-dir-path')?.value?.trim();
+  if (!dirPath) return toast('Klasör yolu gerekli', 'error');
+  const fullPath = localRepoPath + '/' + dirPath;
+  const result = await V.localCreateDir(fullPath);
+  if (result.success) { toast('Klasör oluşturuldu', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+function showRenameFileModal(fileName) {
+  openModal('Dosya Yeniden Adlandır', `
+    <div class="input-group"><label>Mevcut İsim</label><input type="text" value="${escapeHtml(fileName)}" disabled></div>
+    <div class="input-group"><label>Yeni İsim</label><input type="text" id="new-file-name" placeholder="yeni-isim.ts" value="${escapeHtml(fileName)}"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doRenameFile('${escapeJsStr(fileName)}')">Yeniden Adlandır</button>
+  `);
+}
+
+async function doRenameFile(oldName) {
+  const newName = document.getElementById('new-file-name')?.value?.trim();
+  if (!newName) return toast('Yeni isim gerekli', 'error');
+  const oldPath = localRepoPath + '/' + oldName;
+  const newPath = localRepoPath + '/' + newName;
+  const result = await V.localRenameFile(oldPath, newPath);
+  if (result.success) { toast('Dosya yeniden adlandırıldı', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+function showMoveFileModal(fileName) {
+  openModal('Dosya Taşı', `
+    <div class="input-group"><label>Dosya</label><input type="text" value="${escapeHtml(fileName)}" disabled></div>
+    <div class="input-group"><label>Hedef Yol (repo kökünden)</label><input type="text" id="move-dest-path" placeholder="src/utils/" value="${escapeHtml(fileName)}"></div>
+    <button class="btn btn-primary btn-block mt-md" onclick="doMoveFile('${escapeJsStr(fileName)}')">Taşı</button>
+  `);
+}
+
+async function doMoveFile(fileName) {
+  const destPath = document.getElementById('move-dest-path')?.value?.trim();
+  if (!destPath) return toast('Hedef yol gerekli', 'error');
+  const srcPath = localRepoPath + '/' + fileName;
+  const fullDest = localRepoPath + '/' + destPath;
+  const result = await V.localMoveFile(srcPath, fullDest);
+  if (result.success) { toast('Dosya taşındı', 'success'); closeModal(); refreshLocalTab(); }
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ==========================================
+// LOG SEARCH
+// ==========================================
+
+function showLogSearchModal() {
+  if (!localRepoPath) return toast('Önce yerel repo seçin', 'error');
+  openModal('Commit Geçmişinde Ara', `
+    <div class="input-group">
+      <label>Aranacak metin</label>
+      <div class="flex-row gap-sm">
+        <input type="text" id="log-search-query" placeholder="commit mesajı ara..." style="flex:1;">
+        <button class="btn btn-primary" onclick="doLogSearch()">Ara</button>
+      </div>
+    </div>
+    <div id="log-search-results" style="max-height:50vh;overflow:auto;"></div>
+  `);
+}
+
+async function doLogSearch() {
+  const query = document.getElementById('log-search-query')?.value?.trim();
+  if (!query) return;
+  const div = document.getElementById('log-search-results');
+  div.innerHTML = loading();
+  
+  const result = await V.gitLogSearch(localRepoPath, query);
+  if (!result.success) { div.innerHTML = `<p class="text-danger">${escapeHtml(result.error)}</p>`; return; }
+  
+  const commits = result.log?.all || [];
+  div.innerHTML = commits.length === 0 ? '<p class="text-muted mt-md">Sonuç bulunamadı</p>' : `
+    <p class="text-muted text-sm mt-md mb-sm">${commits.length} commit bulundu</p>
+    ${commits.map(c => `
+      <div class="commit-item" onclick="showLocalCommitDetail('${escapeHtml(c.hash)}')">
+        <div class="commit-dot"></div>
+        <div class="commit-info">
+          <div class="commit-message">${escapeHtml(c.message.split('\n')[0])}</div>
+          <div class="commit-meta">
+            <span class="commit-sha" onclick="event.stopPropagation();copyToClipboard('${escapeHtml(c.hash)}')" title="SHA kopyala">${c.hash.substring(0, 7)}</span>
+            <span>${escapeHtml(c.author_name)}</span>
+            <span>${timeAgo(c.date)}</span>
+          </div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ==========================================
+// DIFF STAT SUMMARY
+// ==========================================
+
+async function showDiffStat() {
+  if (!localRepoPath) return toast('Önce yerel repo seçin', 'error');
+  const result = await V.gitDiffStat(localRepoPath);
+  if (!result.success) return toast('Hata: ' + result.error, 'error');
+  openModal('Diff İstatistikleri', `
+    <div class="diff-block" style="max-height:60vh;overflow:auto;">
+      <pre style="padding:12px;font-family:var(--font-mono);font-size:12px;line-height:1.6;margin:0;white-space:pre-wrap;">${escapeHtml(result.stat || 'Değişiklik yok')}</pre>
+    </div>
+  `);
+}
+
+// ==========================================
+// REPO LANGUAGE CHART
+// ==========================================
+
+function renderLanguageChart(languages) {
+  if (!languages || Object.keys(languages).length === 0) return '<p class="text-muted text-sm">Dil bilgisi yok</p>';
+  const total = Object.values(languages).reduce((a, b) => a + b, 0);
+  const colors = {
+    JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', Java: '#b07219', Go: '#00ADD8',
+    Rust: '#dea584', 'C++': '#f34b7d', C: '#555555', 'C#': '#178600', Ruby: '#701516', PHP: '#4F5D95',
+    Swift: '#F05138', Kotlin: '#A97BFF', Dart: '#00B4AB', HTML: '#e34c26', CSS: '#563d7c',
+    Shell: '#89e051', Lua: '#000080', Vim: '#199f4b', Dockerfile: '#384d54'
+  };
+  const sorted = Object.entries(languages).sort((a, b) => b[1] - a[1]);
+  
+  return `
+    <div style="margin:8px 0;">
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:8px;">
+        ${sorted.map(([lang, bytes]) => `<div style="width:${(bytes / total * 100).toFixed(1)}%;background:${colors[lang] || '#8b949e'};" title="${escapeHtml(lang)}: ${(bytes / total * 100).toFixed(1)}%"></div>`).join('')}
+      </div>
+      <div class="flex-row gap-md flex-wrap">
+        ${sorted.slice(0, 8).map(([lang, bytes]) => `
+          <span class="flex-row gap-sm text-sm">
+            <span style="width:10px;height:10px;border-radius:50%;background:${colors[lang] || '#8b949e'};display:inline-block;"></span>
+            ${escapeHtml(lang)} <span class="text-muted">${(bytes / total * 100).toFixed(1)}%</span>
+          </span>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ==========================================
+// WATCHERS & FORKS LIST
+// ==========================================
+
+async function showWatchers() {
+  if (!selectedRepo) return toast('Önce repo seçin', 'error');
+  const result = await V.listWatchers(selectedRepo.owner, selectedRepo.name);
+  if (!result.success) return toast('Hata: ' + result.error, 'error');
+  openModal('İzleyenler (Watchers)', result.watchers.length === 0 ? '<p class="text-muted">İzleyen yok</p>' :
+    result.watchers.map(w => `
+      <div class="list-item" onclick="showUserProfile('${escapeHtml(w.login)}')" style="cursor:pointer;">
+        <img src="${escapeHtml(w.avatar_url)}" width="32" height="32" style="border-radius:50%;">
+        <div class="list-item-content"><div class="list-item-title">${escapeHtml(w.login)}</div></div>
+      </div>
+    `).join('')
+  );
+}
+
+async function showForksList() {
+  if (!selectedRepo) return toast('Önce repo seçin', 'error');
+  const result = await V.listForks(selectedRepo.owner, selectedRepo.name);
+  if (!result.success) return toast('Hata: ' + result.error, 'error');
+  openModal('Fork\'lar', result.forks.length === 0 ? '<p class="text-muted">Fork yok</p>' :
+    result.forks.map(f => `
+      <div class="list-item" style="cursor:pointer;">
+        <img src="${escapeHtml(f.owner?.avatar_url || '')}" width="32" height="32" style="border-radius:50%;">
+        <div class="list-item-content">
+          <div class="list-item-title">${escapeHtml(f.full_name)}</div>
+          <div class="list-item-subtitle">${svgIcon('star')} ${f.stargazers_count} · ${timeAgo(f.created_at)}</div>
+        </div>
+      </div>
+    `).join('')
+  );
+}
+
+// ==========================================
+// CONTRIBUTORS LIST
+// ==========================================
+
+async function showContributors() {
+  if (!selectedRepo) return toast('Önce repo seçin', 'error');
+  const result = await V.listContributors(selectedRepo.owner, selectedRepo.name);
+  if (!result.success) return toast('Hata: ' + result.error, 'error');
+  openModal('Katkıda Bulunanlar', result.contributors.length === 0 ? '<p class="text-muted">Katkıda bulunan yok</p>' :
+    result.contributors.map(c => `
+      <div class="list-item" onclick="showUserProfile('${escapeHtml(c.login)}')" style="cursor:pointer;">
+        <img src="${escapeHtml(c.avatar_url)}" width="32" height="32" style="border-radius:50%;">
+        <div class="list-item-content">
+          <div class="list-item-title">${escapeHtml(c.login)}</div>
+          <div class="list-item-subtitle">${c.contributions} katkı</div>
+        </div>
+        <span class="badge">${c.contributions}</span>
+      </div>
+    `).join('')
+  );
+}
+
+// ==========================================
+// DOWNLOAD ZIP
+// ==========================================
+
+async function downloadRepoZip() {
+  if (!selectedRepo) return toast('Önce repo seçin', 'error');
+  toast('ZIP indiriliyor...', 'info');
+  const result = await V.downloadZip(selectedRepo.owner, selectedRepo.name, 'main');
+  if (result.success) toast('ZIP indirildi', 'success');
+  else toast('Hata: ' + result.error, 'error');
+}
+
+// ==========================================
+// AUTO-REFRESH
+// ==========================================
+
+let autoRefreshInterval = null;
+
+function toggleAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+    toast('Otomatik yenileme kapatıldı', 'info');
+    return;
+  }
+  autoRefreshInterval = setInterval(() => {
+    if (currentPage === 'localrepo' && localRepoPath) {
+      updateStatusBarBranch();
+    }
+    updateNotificationBadge();
+  }, 30000);
+  toast('Otomatik yenileme açıldı (30sn)', 'success');
+}
+
+// ==========================================
+// THEME AUTO-DETECT
+// ==========================================
+
+function detectSystemTheme() {
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    setTheme('light');
+    toast('Açık tema uygulandı', 'success');
+  } else {
+    setTheme('dark');
+    toast('Koyu tema uygulandı', 'success');
+  }
+}
+
+// ==========================================
+// RECENT REPOS MEMORY
+// ==========================================
+
+let recentLocalPaths = [];
+
+function saveRecentPath(path) {
+  recentLocalPaths = recentLocalPaths.filter(p => p !== path);
+  recentLocalPaths.unshift(path);
+  if (recentLocalPaths.length > 10) recentLocalPaths.pop();
+  try { localStorage.setItem('vulpax-recent-paths', JSON.stringify(recentLocalPaths)); } catch(e) {}
+}
+
+function loadRecentPaths() {
+  try { recentLocalPaths = JSON.parse(localStorage.getItem('vulpax-recent-paths') || '[]'); } catch(e) { recentLocalPaths = []; }
+}
+
+// ==========================================
+// ENHANCED DASHBOARD STATS
+// ==========================================
+
+function renderDashboardStats(repos, notifs, gists) {
+  const totalStars = repos.reduce((sum, r) => sum + (r.stargazers_count || 0), 0);
+  const totalForks = repos.reduce((sum, r) => sum + (r.forks_count || 0), 0);
+  const languages = {};
+  repos.forEach(r => { if (r.language) languages[r.language] = (languages[r.language] || 0) + 1; });
+  const topLang = Object.entries(languages).sort((a, b) => b[1] - a[1])[0];
+  
+  return `
+    <div class="stats-grid">
+      <div class="stat-card" onclick="navigateTo('repos')" style="cursor:pointer;">
+        <div class="stat-icon blue">${svgIcon('repo')}</div>
+        <div class="stat-info"><div class="stat-number">${repos.length}</div><div class="stat-label">Toplam Repo</div></div>
+      </div>
+      <div class="stat-card" onclick="navigateTo('stars')" style="cursor:pointer;">
+        <div class="stat-icon yellow">${svgIcon('star')}</div>
+        <div class="stat-info"><div class="stat-number">${totalStars}</div><div class="stat-label">Toplam Yıldız</div></div>
+      </div>
+      <div class="stat-card" onclick="navigateTo('notifications')" style="cursor:pointer;">
+        <div class="stat-icon red"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+        <div class="stat-info"><div class="stat-number">${notifs.length}</div><div class="stat-label">Bildirim</div></div>
+      </div>
+      <div class="stat-card" onclick="navigateTo('gists')" style="cursor:pointer;">
+        <div class="stat-icon green">${svgIcon('file')}</div>
+        <div class="stat-info"><div class="stat-number">${gists.length}</div><div class="stat-label">Gist</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange">${svgIcon('fork')}</div>
+        <div class="stat-info"><div class="stat-number">${totalForks}</div><div class="stat-label">Toplam Fork</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple">${svgIcon('branch')}</div>
+        <div class="stat-info"><div class="stat-number">${topLang ? topLang[0] : '-'}</div><div class="stat-label">En Çok Dil</div></div>
+      </div>
+    </div>
+  `;
+}
+
+// ==========================================
+// INIT ENHANCEMENTS
+// ==========================================
+
+function initEnhancements() {
+  initSidebarToggle();
+  loadRecentPaths();
+  updateNotificationBadge();
+  updateStatusBar();
+  // Auto-refresh every 60s for notifications
+  setInterval(() => {
+    updateNotificationBadge();
+  }, 60000);
+}
